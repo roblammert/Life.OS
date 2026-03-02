@@ -1,13 +1,14 @@
 import { ANALYZE_JOURNAL_ENTRY_PROMPT } from "./prompts/journal-analysis";
 import { NOTES_ACTION_EXTRACTION_PROMPT } from "./prompts/notes-analysis";
 import {
+  LIFE_MOMENTS_DETECTION_PROMPT,
   MEMORY_CONSOLIDATION_PROMPT,
   SMART_NOTIFICATION_SUGGESTIONS_PROMPT,
 } from "./prompts/reviews";
 import { STORAGE_DATA_INSIGHTS_PROMPT } from "./prompts/storage-analysis";
 import { TASK_BEHAVIOR_ANALYSIS_PROMPT, TASK_BREAKDOWN_PROMPT } from "./prompts/task-analysis";
 import { WebLlmEngine, type WebLlmStructuredInsight } from "./webllm";
-import type { CoachInsight, NotificationItem, ReviewSummary } from "../../core/types";
+import type { CoachInsight, LifeMoment, NotificationItem, ReviewSummary } from "../../core/types";
 
 export interface PromptInsightPayload {
   content: string;
@@ -116,6 +117,17 @@ export class PromptEngine {
       lessons: topInsights.map((insight) => insight.content).slice(0, 3),
       nextFocus: topInsights.flatMap((insight) => insight.actions).slice(0, 3),
     };
+  }
+
+  generateLifeMoments(insights: CoachInsight[]): LifeMoment[] {
+    renderPrompt(LIFE_MOMENTS_DETECTION_PROMPT, {});
+    return insights.slice(0, 3).map((insight, index) => ({
+      id: `moment-${insight.id}`,
+      date: insight.createdAt.slice(0, 10),
+      title: `Life Moment ${index + 1}: ${insight.sourceModule}`,
+      description: insight.content,
+      whyItMatters: insight.actions[0] ?? "Reflective continuity across modules.",
+    }));
   }
 }
 

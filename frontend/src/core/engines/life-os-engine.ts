@@ -2,6 +2,7 @@ import type {
   JournalEntry,
   LifeGraphEdge,
   LifeGraphNode,
+  LifeMoment,
   NoteItem,
   NotificationItem,
   ReviewSummary,
@@ -285,6 +286,10 @@ export class LifeOsEngine {
 
   generateReview(period: "daily" | "weekly"): ReviewSummary {
     return this.coach.generateReview(period);
+  }
+
+  generateLifeMoments(): LifeMoment[] {
+    return this.coach.generateLifeMoments();
   }
 
   exportJournalMarkdownBundle(): string {

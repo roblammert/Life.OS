@@ -71,6 +71,14 @@ export interface ReviewSummary {
   nextFocus: string[];
 }
 
+export interface LifeMoment {
+  id: string;
+  date: string;
+  title: string;
+  description: string;
+  whyItMatters: string;
+}
+
 export interface TimelineEvent {
   id: string;
   module: ModuleName;

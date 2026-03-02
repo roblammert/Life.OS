@@ -1,4 +1,4 @@
-import type { CoachInsight, ModuleName, NotificationItem, ReviewSummary } from "../types";
+import type { CoachInsight, LifeMoment, ModuleName, NotificationItem, ReviewSummary } from "../types";
 import { createId, nowIso } from "../utils";
 import { PromptEngine, type PromptInsightPayload } from "../../lib/llm/prompt-engine";
 
@@ -57,6 +57,10 @@ export class CoachEngine {
 
   generateReview(period: "daily" | "weekly"): ReviewSummary {
     return this.promptEngine.generateReview(period, this.insights);
+  }
+
+  generateLifeMoments(): LifeMoment[] {
+    return this.promptEngine.generateLifeMoments(this.insights);
   }
 }
 

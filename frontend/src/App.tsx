@@ -609,9 +609,11 @@ function CoachPage() {
   const { snapshot, actions } = useLifeOs();
   const [notifications, setNotifications] = useState<ReturnType<typeof actions.generateNotifications>>([]);
   const [review, setReview] = useState<ReturnType<typeof actions.generateReview> | null>(null);
+  const [lifeMoments, setLifeMoments] = useState<ReturnType<typeof actions.generateLifeMoments>>([]);
 
   useEffect(() => {
     setNotifications(actions.generateNotifications());
+    setLifeMoments(actions.generateLifeMoments());
   }, [actions, snapshot.insights]);
 
   return (
@@ -638,6 +640,16 @@ function CoachPage() {
           <li key={notification.id} className="card">
             <strong>{notification.triggerDescription}</strong>
             <p>{notification.message}</p>
+          </li>
+        ))}
+      </ul>
+      <h3>Life Moments Feed</h3>
+      <ul className="stack">
+        {lifeMoments.map((moment) => (
+          <li key={moment.id} className="card">
+            <strong>{moment.date} — {moment.title}</strong>
+            <p>{moment.description}</p>
+            <p>Why it matters: {moment.whyItMatters}</p>
           </li>
         ))}
       </ul>
