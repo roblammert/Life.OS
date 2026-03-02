@@ -721,6 +721,7 @@ function SyncPage() {
 }
 
 function InsightCard({ insight }: { insight: ReturnType<typeof useLifeOs>["snapshot"]["insights"][number] }) {
+  const { actions } = useLifeOs();
   const moduleLabels: Record<string, string> = {
     journal: "Life.Journal",
     notes: "Life.Notes",
@@ -736,7 +737,20 @@ function InsightCard({ insight }: { insight: ReturnType<typeof useLifeOs>["snaps
       {insight.actions.length > 0 ? (
         <ul>
           {insight.actions.map((action) => (
-            <li key={action}>{action}</li>
+            <li key={action}>
+              {action}
+              <button
+                onClick={() =>
+                  actions.createTask({
+                    title: `Coach Action: ${action}`,
+                    description: insight.content,
+                    priority: "medium",
+                  })
+                }
+              >
+                Create Task
+              </button>
+            </li>
           ))}
         </ul>
       ) : null}
