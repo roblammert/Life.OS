@@ -5,13 +5,45 @@
 
 body {
   margin: 0;
-  background: #0f172a;
+  background: #0b1020;
   color: #e2e8f0;
 }
 
 .app-shell {
   min-height: 100vh;
   padding: 1rem;
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+.theme-dark {
+  --app-bg: #0f172a;
+  --app-text: #e2e8f0;
+  --card-bg: #1e293b;
+  --card-border: #334155;
+  --input-bg: #0f172a;
+  --input-border: #475569;
+  --link-color: #93c5fd;
+}
+
+.theme-light {
+  --app-bg: #f8fafc;
+  --app-text: #0f172a;
+  --card-bg: #ffffff;
+  --card-border: #cbd5e1;
+  --input-bg: #ffffff;
+  --input-border: #94a3b8;
+  --link-color: #1d4ed8;
+}
+
+.theme-high-contrast {
+  --app-bg: #000000;
+  --app-text: #ffffff;
+  --card-bg: #111111;
+  --card-border: #ffffff;
+  --input-bg: #000000;
+  --input-border: #ffffff;
+  --link-color: #facc15;
 }
 
 .top-bar {
@@ -38,7 +70,7 @@ body {
 }
 
 .nav a {
-  color: #93c5fd;
+  color: var(--link-color);
 }
 
 .content {
@@ -54,8 +86,8 @@ body {
 }
 
 .card {
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
   border-radius: 0.5rem;
   padding: 0.75rem;
 }
@@ -73,9 +105,9 @@ button {
   width: 100%;
   padding: 0.55rem;
   border-radius: 0.4rem;
-  border: 1px solid #475569;
-  background: #0f172a;
-  color: #e2e8f0;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--app-text);
 }
 
 button {

@@ -15,6 +15,11 @@ function Layout() {
   const [results, setResults] = useState<GlobalSearchResult[]>([]);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [theme, setTheme] = useState<"dark" | "light" | "high-contrast">(() => {
+    const saved = localStorage.getItem("life-os-theme");
+    if (saved === "light" || saved === "high-contrast" || saved === "dark") return saved;
+    return "dark";
+  });
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -35,6 +40,10 @@ function Layout() {
     };
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem("life-os-theme", theme);
+  }, [theme]);
+
   const onSearch = async (event: FormEvent) => {
     event.preventDefault();
     setResults(await actions.searchGlobal(query));
@@ -48,7 +57,7 @@ function Layout() {
   };
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell theme-${theme}`}>
       <header className="top-bar">
         <h1>Life.OS</h1>
         <button onClick={actions.syncNow}>
@@ -58,6 +67,11 @@ function Layout() {
         <span>Pending sync ops: {snapshot.syncQueue.length}</span>
         <span className={isOnline ? "status-online" : "status-offline"}>{isOnline ? "Online" : "Offline"}</span>
         {installPrompt ? <button onClick={() => void onInstall()}>Install App</button> : null}
+        <select value={theme} onChange={(event) => setTheme(event.target.value as typeof theme)}>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="high-contrast">High Contrast</option>
+        </select>
       </header>
       <form className="search-row" onSubmit={onSearch}>
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Global search across journal, notes, tasks, storage" />
@@ -375,6 +389,7 @@ function TimelinePage() {
   const { snapshot } = useLifeOs();
   const [moduleFilter, setModuleFilter] = useState<"all" | "journal" | "notes" | "tasks" | "storage">("all");
   const [eventTypeFilter, setEventTypeFilter] = useState<"all" | "created" | "updated" | "completed">("all");
+  const [timelineView, setTimelineView] = useState<"daily" | "weekly" | "monthly" | "yearly">("daily");
   const [textFilter, setTextFilter] = useState("");
 
   const filtered = snapshot.timeline.filter((event) => {
@@ -383,16 +398,30 @@ function TimelinePage() {
     const textMatch = textFilter.trim() === "" || event.title.toLowerCase().includes(textFilter.toLowerCase());
     return moduleMatch && typeMatch && textMatch;
   });
-  const dailyCounts = filtered.reduce<Record<string, number>>((acc, event) => {
-    const day = event.timestamp.slice(0, 10);
-    acc[day] = (acc[day] ?? 0) + 1;
+  const toWeekBucket = (timestamp: string): string => {
+    const date = new Date(timestamp);
+    const weekDate = new Date(date.getTime());
+    weekDate.setDate(date.getDate() + 4 - (date.getDay() || 7));
+    const yearStart = new Date(Date.UTC(weekDate.getFullYear(), 0, 1));
+    const weekNo = Math.ceil((((weekDate.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return `${weekDate.getFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+  };
+  const toBucket = (timestamp: string): string => {
+    if (timelineView === "daily") return timestamp.slice(0, 10);
+    if (timelineView === "weekly") return toWeekBucket(timestamp);
+    if (timelineView === "monthly") return timestamp.slice(0, 7);
+    return timestamp.slice(0, 4);
+  };
+  const groupedCounts = filtered.reduce<Record<string, number>>((acc, event) => {
+    const bucket = toBucket(event.timestamp);
+    acc[bucket] = (acc[bucket] ?? 0) + 1;
     return acc;
   }, {});
   const moduleCounts = filtered.reduce<Record<string, number>>((acc, event) => {
     acc[event.module] = (acc[event.module] ?? 0) + 1;
     return acc;
   }, {});
-  const topDays = Object.entries(dailyCounts)
+  const topBuckets = Object.entries(groupedCounts)
     .sort((a, b) => b[0].localeCompare(a[0]))
     .slice(0, 5);
   const topModules = Object.entries(moduleCounts).sort((a, b) => b[1] - a[1]);
@@ -414,17 +443,23 @@ function TimelinePage() {
           <option value="updated">Updated</option>
           <option value="completed">Completed</option>
         </select>
+        <select value={timelineView} onChange={(event) => setTimelineView(event.target.value as typeof timelineView)}>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="yearly">Yearly</option>
+        </select>
         <input value={textFilter} onChange={(event) => setTextFilter(event.target.value)} placeholder="Filter by text" />
       </div>
       <div className="cards">
         <article className="card">Filtered events: {filtered.length}</article>
-        <article className="card">Distinct days: {Object.keys(dailyCounts).length}</article>
+        <article className="card">Distinct {timelineView} periods: {Object.keys(groupedCounts).length}</article>
       </div>
-      <h3>Recent Daily Activity</h3>
+      <h3>Recent {timelineView} Activity</h3>
       <ul className="stack">
-        {topDays.map(([day, count]) => (
-          <li key={day} className="card">
-            {day}: {count} events
+        {topBuckets.map(([bucket, count]) => (
+          <li key={bucket} className="card">
+            {bucket}: {count} events
           </li>
         ))}
       </ul>
