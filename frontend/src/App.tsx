@@ -284,16 +284,23 @@ function AuthLoginPage({ onLogin }: { onLogin: (email: string) => void }) {
   const [done, setDone] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberEmail, setRememberEmail] = useState(() => localStorage.getItem("life-os-remember-email") === "true");
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lastAttemptAt, setLastAttemptAt] = useState<string | null>(null);
   const emailDomain = email.includes("@") ? email.split("@")[1] : "";
   const loginPayload = { email: email.trim().toLowerCase(), rememberEmail };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (!email.trim() || !password.trim()) return;
+    setLastAttemptAt(new Date().toISOString());
+    if (!email.trim() || !password.trim()) {
+      setFailedAttempts((current) => current + 1);
+      return;
+    }
     localStorage.setItem("life-os-remember-email", String(rememberEmail));
     if (rememberEmail) localStorage.setItem("life-os-remembered-email", email.trim().toLowerCase());
     else localStorage.removeItem("life-os-remembered-email");
     onLogin(email.trim().toLowerCase());
+    setFailedAttempts(0);
     setDone(true);
   };
 
@@ -323,8 +330,16 @@ function AuthLoginPage({ onLogin }: { onLogin: (email: string) => void }) {
         <button type="button" onClick={() => downloadContent(JSON.stringify(loginPayload, null, 2), "life-os-login-payload.json", "application/json")} disabled={!email.trim()}>
           Export Login Payload
         </button>
+        <button type="button" onClick={() => downloadContent(`email=${loginPayload.email}\nremember=${loginPayload.rememberEmail}`, "life-os-login-payload.txt", "text/plain")} disabled={!email.trim()}>
+          Export Login Payload TXT
+        </button>
+        <button type="button" onClick={() => setEmail(localStorage.getItem("life-os-remembered-email") ?? "")}>
+          Use Remembered Email
+        </button>
         <article className="card">Email domain: {emailDomain || "n/a"}</article>
         <article className="card">Password length: {password.length}</article>
+        <article className="card">Failed attempts: {failedAttempts}</article>
+        <article className="card">Last attempt: {lastAttemptAt ? new Date(lastAttemptAt).toLocaleTimeString() : "n/a"}</article>
       </div>
       {done ? <p>Logged in locally.</p> : null}
     </section>
@@ -337,6 +352,7 @@ function AuthRegisterPage({ onRegister }: { onRegister: (email: string) => void 
   const [confirmPassword, setConfirmPassword] = useState("");
   const [acceptUpdates, setAcceptUpdates] = useState(false);
   const [showPasswords, setShowPasswords] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [done, setDone] = useState(false);
   const passwordStrongEnough = password.length >= 8;
   const passwordsMatch = password === confirmPassword;
@@ -345,7 +361,7 @@ function AuthRegisterPage({ onRegister }: { onRegister: (email: string) => void 
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (!email.trim() || !password.trim() || !passwordStrongEnough || !passwordsMatch) return;
+    if (!email.trim() || !password.trim() || !passwordStrongEnough || !passwordsMatch || !acceptTerms) return;
     localStorage.setItem("life-os-marketing-opt-in", String(acceptUpdates));
     onRegister(email.trim().toLowerCase());
     setDone(true);
@@ -364,6 +380,9 @@ function AuthRegisterPage({ onRegister }: { onRegister: (email: string) => void 
         <label>
           <input type="checkbox" checked={acceptUpdates} onChange={(event) => setAcceptUpdates(event.target.checked)} /> Receive product updates
         </label>
+        <label>
+          <input type="checkbox" checked={acceptTerms} onChange={(event) => setAcceptTerms(event.target.checked)} /> Accept local terms
+        </label>
         <article className="card">Password strength: {passwordStrongEnough ? "ok" : "min 8 chars"}</article>
         <article className="card">Passwords match: {passwordsMatch ? "yes" : "no"}</article>
         <button type="submit">Create Account</button>
@@ -376,10 +395,17 @@ function AuthRegisterPage({ onRegister }: { onRegister: (email: string) => void 
         <button type="button" onClick={() => downloadContent(JSON.stringify(registerPayload, null, 2), "life-os-register-payload.json", "application/json")} disabled={!email.trim()}>
           Export Register Payload
         </button>
-        <button type="button" onClick={() => { setEmail(""); setPassword(""); setConfirmPassword(""); setAcceptUpdates(false); setDone(false); }}>
+        <button type="button" onClick={() => downloadContent(`email=${registerPayload.email}\nupdates=${registerPayload.acceptUpdates}`, "life-os-register-payload.txt", "text/plain")} disabled={!email.trim()}>
+          Export Register Payload TXT
+        </button>
+        <button type="button" onClick={() => { setEmail(""); setPassword(""); setConfirmPassword(""); setAcceptUpdates(false); setAcceptTerms(false); setDone(false); }}>
           Clear Form
         </button>
+        <button type="button" onClick={() => setEmail("sample@lifeos.app")}>
+          Use Sample Email
+        </button>
         <article className="card">Email local-part: {emailLocalPart || "n/a"}</article>
+        <article className="card">Updates opt-in: {acceptUpdates ? "yes" : "no"}</article>
       </div>
       {done ? <p>Account created locally and signed in.</p> : null}
     </section>
@@ -392,6 +418,7 @@ function AuthResetPage() {
   const [includeRecentActivity, setIncludeRecentActivity] = useState(false);
   const [done, setDone] = useState(false);
   const resetPayload = { email: email.trim(), reason, includeRecentActivity };
+  const resetTip = reason === "security" ? "Consider rotating active sessions too." : reason === "rotation" ? "Schedule regular updates." : "Use account recovery if needed.";
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -421,13 +448,20 @@ function AuthResetPage() {
         <button type="button" onClick={() => void navigator.clipboard?.writeText(JSON.stringify(resetPayload))} disabled={!email.trim()}>
           Copy Reset Payload
         </button>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(email)} disabled={!email.trim()}>
+          Copy Email
+        </button>
         <button type="button" onClick={() => setEmail(localStorage.getItem("life-os-auth-email") ?? "")}>
           Use Current Auth Email
+        </button>
+        <button type="button" onClick={() => downloadContent(`email=${resetPayload.email}\nreason=${resetPayload.reason}\nincludeRecentActivity=${resetPayload.includeRecentActivity}`, "life-os-reset-request.txt", "text/plain")} disabled={!email.trim()}>
+          Export Reset Request TXT
         </button>
         <button type="button" onClick={() => { setEmail(""); setReason("forgot"); setIncludeRecentActivity(false); setDone(false); }}>
           Clear Form
         </button>
         <article className="card">Reset reason: {reason}</article>
+        <article className="card">{resetTip}</article>
       </div>
       {done ? <p>Reset instruction queued locally.</p> : null}
     </section>
@@ -470,9 +504,17 @@ function HelpPage() {
         <button type="button" onClick={() => downloadContent(JSON.stringify(visibleItems, null, 2), "life-os-help-visible.json", "application/json")} disabled={visibleItems.length === 0}>
           Export Visible Help JSON
         </button>
+        <button type="button" onClick={() => downloadContent(visibleItems.map((item) => `${item.category}: ${item.text}`).join("\n"), "life-os-help-visible.txt", "text/plain")} disabled={visibleItems.length === 0}>
+          Export Visible Help TXT
+        </button>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(visibleCategories.join(", "))} disabled={visibleCategories.length === 0}>
+          Copy Categories
+        </button>
         <button type="button" onClick={() => { setSearch(""); setCategory("all"); }}>
           Reset Help Filters
         </button>
+        <Link to="/export">Open Export</Link>
+        <Link to="/import">Open Import</Link>
         <article className="card">Visible help items: {visibleItems.length}</article>
         <article className="card">Visible categories: {visibleCategories.join(", ") || "none"}</article>
       </div>
@@ -2625,6 +2667,17 @@ function ExportPage() {
     downloadContent(["workbookId,workbookName,metricLabel,metricValue", ...rows].join("\n"), "life-os-export-workbook-metrics.csv", "text/csv");
     setMessage("Workbook metrics CSV export created.");
   };
+  const exportPreferencesJson = () => {
+    const payload = {
+      theme: localStorage.getItem("life-os-theme"),
+      authEmail: localStorage.getItem("life-os-auth-email"),
+      rememberedEmail: localStorage.getItem("life-os-remembered-email"),
+      rememberEmail: localStorage.getItem("life-os-remember-email"),
+      marketingOptIn: localStorage.getItem("life-os-marketing-opt-in"),
+    };
+    downloadContent(JSON.stringify(payload, null, 2), "life-os-local-preferences.json", "application/json");
+    setMessage("Local preferences JSON export created.");
+  };
 
   return (
     <section>
@@ -2731,6 +2784,12 @@ function ExportPage() {
         </button>
         <button type="button" onClick={() => void navigator.clipboard?.writeText(actions.exportData())}>
           Copy Full JSON Export
+        </button>
+        <button type="button" onClick={exportPreferencesJson}>
+          Export Local Preferences JSON
+        </button>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(["life-os-export-summary.json", "life-os-sync-queue.json", "life-os-export-workbook-metrics.csv"].join("\n"))}>
+          Copy Export File List
         </button>
         <button type="button" onClick={() => setMessage(null)}>
           Clear Message
@@ -2855,6 +2914,7 @@ function ImportPage() {
     setCsvText(text);
     importTasksCsv(text);
   };
+  const csvHeaderPreview = csvPreviewRows[0] ?? "";
 
   return (
     <section>
@@ -2880,6 +2940,9 @@ function ImportPage() {
           />
           <button type="button" onClick={() => void navigator.clipboard?.writeText(importText)} disabled={!importText.trim()}>
             Copy JSON Input
+          </button>
+          <button type="button" onClick={() => setImportText('{"journalEntries":[],"notes":[],"tasks":[],"workbooks":[],"timeline":[],"graphNodes":[],"graphEdges":[],"insights":[],"syncQueue":[],"syncStatus":{"state":"idle"}}')}>
+            Load Sample JSON
           </button>
           <button type="button" onClick={() => setImportText("")}>Clear JSON Input</button>
           <button type="submit">Import JSON</button>
@@ -2914,7 +2977,11 @@ function ImportPage() {
         <button type="button" onClick={() => { setImportText(""); setCsvText(""); setMessage(null); }}>
           Clear All Inputs
         </button>
+        <button type="button" onClick={() => setMessage(null)}>
+          Clear Message
+        </button>
         <article className="card">CSV preview rows: {csvPreviewRows.length}</article>
+        <article className="card">CSV header: {csvHeaderPreview || "n/a"}</article>
         <article className="card">JSON input chars: {importText.length}</article>
         {message ? <p>{message}</p> : null}
       </div>
@@ -2996,6 +3063,10 @@ function SettingsPage() {
   const exportRecentJournalTitlesTxt = () => {
     downloadContent(recentJournalTitles.join("\n"), "life-os-recent-journal-titles.txt", "text/plain");
   };
+  const exportSearchResultsCsv = () => {
+    const rows = filteredNoteSearchResults.map((title) => `"${title.replaceAll('"', '""')}"`);
+    downloadContent(["title", ...rows].join("\n"), "life-os-note-search-results.csv", "text/csv");
+  };
   const totalStateRecords =
     snapshot.journalEntries.length +
     snapshot.notes.length +
@@ -3040,6 +3111,9 @@ function SettingsPage() {
         <button type="button" onClick={exportSearchResultsTxt} disabled={filteredNoteSearchResults.length === 0}>
           Export Search Results TXT
         </button>
+        <button type="button" onClick={exportSearchResultsCsv} disabled={filteredNoteSearchResults.length === 0}>
+          Export Search Results CSV
+        </button>
         <button type="button" onClick={() => void navigator.clipboard?.writeText(filteredNoteSearchResults.join("\n"))} disabled={filteredNoteSearchResults.length === 0}>
           Copy Search Results
         </button>
@@ -3059,8 +3133,14 @@ function SettingsPage() {
         <button type="button" onClick={() => setShowStateDetails((current) => !current)}>
           {showStateDetails ? "Hide State Details" : "Show State Details"}
         </button>
+        <button type="button" onClick={() => { setShowStateDetails(false); setAutoRefresh(false); setRefreshIntervalSeconds(15); }}>
+          Reset Display Controls
+        </button>
         <button type="button" onClick={() => { void refreshOpenTaskCount(); void refreshRecentJournalTitles(); }}>
           Refresh All Widgets
+        </button>
+        <button type="button" onClick={() => { setOpenTaskCount(null); setRecentJournalTitles([]); }}>
+          Clear Widget Data
         </button>
         <button type="button" onClick={exportRecentJournalTitlesTxt} disabled={recentJournalTitles.length === 0}>
           Export Recent Titles TXT
@@ -3068,6 +3148,7 @@ function SettingsPage() {
         <button type="button" onClick={() => void navigator.clipboard?.writeText(recentJournalTitles.join("\n"))} disabled={recentJournalTitles.length === 0}>
           Copy Recent Titles
         </button>
+        <article className="card">Auto refresh interval: {refreshIntervalSeconds}s</article>
         <div className="cards">
           <Link to="/export">Open Export</Link>
           <Link to="/import">Open Import</Link>
