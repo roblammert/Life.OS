@@ -351,6 +351,8 @@ function JournalPage() {
   const { snapshot, actions } = useLifeOs();
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [search, setSearch] = useState("");
+  const [sentimentFilter, setSentimentFilter] = useState<"all" | "positive" | "neutral" | "negative">("all");
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -360,6 +362,23 @@ function JournalPage() {
     setContent("");
   };
 
+  const displayedEntries = snapshot.journalEntries.filter((entry) => {
+    const textMatch =
+      search.trim() === "" ||
+      entry.title.toLowerCase().includes(search.toLowerCase()) ||
+      entry.contentMarkdown.toLowerCase().includes(search.toLowerCase());
+    if (!textMatch) return false;
+    if (sentimentFilter === "all") return true;
+    if (sentimentFilter === "positive") return entry.sentimentScore > 0.15;
+    if (sentimentFilter === "negative") return entry.sentimentScore < -0.15;
+    return entry.sentimentScore >= -0.15 && entry.sentimentScore <= 0.15;
+  });
+
+  const averageSentiment =
+    displayedEntries.length > 0
+      ? displayedEntries.reduce((acc, entry) => acc + entry.sentimentScore, 0) / displayedEntries.length
+      : 0;
+
   return (
     <section>
       <h2>Life.Journal</h2>
@@ -368,8 +387,22 @@ function JournalPage() {
         <textarea value={content} onChange={(event) => setContent(event.target.value)} rows={4} placeholder="Write your entry..." />
         <button type="submit">Save Entry</button>
       </form>
+      <div className="cards">
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search journal entries"
+        />
+        <select value={sentimentFilter} onChange={(event) => setSentimentFilter(event.target.value as typeof sentimentFilter)}>
+          <option value="all">All sentiment</option>
+          <option value="positive">Positive</option>
+          <option value="neutral">Neutral</option>
+          <option value="negative">Negative</option>
+        </select>
+        <article className="card">Average sentiment: {averageSentiment.toFixed(2)}</article>
+      </div>
       <ul className="stack">
-        {snapshot.journalEntries.map((entry) => (
+        {displayedEntries.map((entry) => (
           <li key={entry.id} className="card">
             <strong>{entry.title}</strong>
             <p>{entry.contentMarkdown}</p>
