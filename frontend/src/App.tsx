@@ -15,6 +15,13 @@ function Layout() {
   const [results, setResults] = useState<GlobalSearchResult[]>([]);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<"phone" | "tablet" | "desktop">(() => {
+    const width = window.innerWidth;
+    if (width < 768) return "phone";
+    if (width < 1024) return "tablet";
+    return "desktop";
+  });
   const [theme, setTheme] = useState<"dark" | "light" | "high-contrast">(() => {
     const saved = localStorage.getItem("life-os-theme");
     if (saved === "light" || saved === "high-contrast" || saved === "dark") return saved;
@@ -44,6 +51,17 @@ function Layout() {
     localStorage.setItem("life-os-theme", theme);
   }, [theme]);
 
+  useEffect(() => {
+    const onResize = () => {
+      const width = window.innerWidth;
+      if (width < 768) setLayoutMode("phone");
+      else if (width < 1024) setLayoutMode("tablet");
+      else setLayoutMode("desktop");
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   const onSearch = async (event: FormEvent) => {
     event.preventDefault();
     setResults(await actions.searchGlobal(query));
@@ -57,7 +75,7 @@ function Layout() {
   };
 
   return (
-    <div className={`app-shell theme-${theme}`}>
+    <div className={`app-shell theme-${theme} layout-${layoutMode}`}>
       <header className="top-bar">
         <h1>Life.OS</h1>
         <button onClick={actions.syncNow}>
@@ -65,14 +83,31 @@ function Layout() {
           {snapshot.syncStatus.lastSyncedAt ? ` (${new Date(snapshot.syncStatus.lastSyncedAt).toLocaleTimeString()})` : ""}
         </button>
         <span>Pending sync ops: {snapshot.syncQueue.length}</span>
+        <span>Layout: {layoutMode}</span>
         <span className={isOnline ? "status-online" : "status-offline"}>{isOnline ? "Online" : "Offline"}</span>
         {installPrompt ? <button onClick={() => void onInstall()}>Install App</button> : null}
+        <button onClick={() => setNotificationOpen((current) => !current)}>
+          Notifications ({actions.generateNotifications().length})
+        </button>
         <select value={theme} onChange={(event) => setTheme(event.target.value as typeof theme)}>
           <option value="dark">Dark</option>
           <option value="light">Light</option>
           <option value="high-contrast">High Contrast</option>
         </select>
       </header>
+      {notificationOpen ? (
+        <aside className="card">
+          <h3>Notification Center</h3>
+          <ul className="stack">
+            {actions.generateNotifications().map((notification) => (
+              <li key={notification.id} className="card">
+                <strong>{notification.triggerDescription}</strong>
+                <p>{notification.message}</p>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      ) : null}
       <form className="search-row" onSubmit={onSearch}>
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Global search across journal, notes, tasks, storage" />
         <button type="submit">Search</button>
