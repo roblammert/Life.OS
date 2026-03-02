@@ -132,6 +132,8 @@ function Layout() {
         <Link to="/coach">Coach</Link>
         <Link to="/timeline">Timeline</Link>
         <Link to="/graph">Graph</Link>
+        <Link to="/export">Export</Link>
+        <Link to="/import">Import</Link>
         <Link to="/settings">Settings</Link>
       </nav>
 
@@ -145,6 +147,8 @@ function Layout() {
           <Route path="/coach" element={<CoachPage />} />
           <Route path="/timeline" element={<TimelinePage />} />
           <Route path="/graph" element={<GraphPage />} />
+          <Route path="/export" element={<ExportPage />} />
+          <Route path="/import" element={<ImportPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -663,34 +667,66 @@ function GraphPage() {
   );
 }
 
-function SettingsPage() {
+function downloadContent(content: string, fileName: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function ExportPage() {
   const { actions } = useLifeOs();
-  const [importText, setImportText] = useState("");
-  const [noteSearch, setNoteSearch] = useState("");
-  const [noteSearchResults, setNoteSearchResults] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
 
-  const downloadExport = () => {
-    const data = actions.exportData();
-    const blob = new Blob([data], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `life-os-export-${new Date().toISOString()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setMessage("Export created.");
-  };
+  return (
+    <section>
+      <h2>Export</h2>
+      <div className="stack">
+        <button
+          onClick={() => {
+            downloadContent(actions.exportData(), `life-os-export-${new Date().toISOString()}.json`, "application/json");
+            setMessage("JSON export created.");
+          }}
+        >
+          Export JSON
+        </button>
+        <button
+          onClick={() => {
+            downloadContent(actions.exportJournalMarkdown(), "life-os-journal.md", "text/markdown");
+            setMessage("Journal markdown export created.");
+          }}
+        >
+          Export Journal Markdown
+        </button>
+        <button
+          onClick={() => {
+            downloadContent(actions.exportNotesMarkdown(), "life-os-notes.md", "text/markdown");
+            setMessage("Notes markdown export created.");
+          }}
+        >
+          Export Notes Markdown
+        </button>
+        <button
+          onClick={() => {
+            downloadContent(actions.exportTasksCsv(), "life-os-tasks.csv", "text/csv");
+            setMessage("Tasks CSV export created.");
+          }}
+        >
+          Export Tasks CSV
+        </button>
+        {message ? <p>{message}</p> : null}
+      </div>
+    </section>
+  );
+}
 
-  const downloadFile = (content: string, fileName: string, mimeType: string) => {
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = fileName;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+function ImportPage() {
+  const { actions } = useLifeOs();
+  const [importText, setImportText] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
 
   const importFromText = (event: FormEvent) => {
     event.preventDefault();
@@ -705,40 +741,10 @@ function SettingsPage() {
     setMessage(result.ok ? "Import successful." : `Import failed: ${result.error}`);
   };
 
-  const runNoteSearch = async (event: FormEvent) => {
-    event.preventDefault();
-    setNoteSearchResults(await actions.searchNoteTitles(noteSearch));
-  };
-
   return (
     <section>
-      <h2>Settings</h2>
+      <h2>Import</h2>
       <div className="stack">
-        <button onClick={downloadExport}>Export JSON</button>
-        <button
-          onClick={() => {
-            downloadFile(actions.exportJournalMarkdown(), "life-os-journal.md", "text/markdown");
-            setMessage("Journal markdown export created.");
-          }}
-        >
-          Export Journal Markdown
-        </button>
-        <button
-          onClick={() => {
-            downloadFile(actions.exportNotesMarkdown(), "life-os-notes.md", "text/markdown");
-            setMessage("Notes markdown export created.");
-          }}
-        >
-          Export Notes Markdown
-        </button>
-        <button
-          onClick={() => {
-            downloadFile(actions.exportTasksCsv(), "life-os-tasks.csv", "text/csv");
-            setMessage("Tasks CSV export created.");
-          }}
-        >
-          Export Tasks CSV
-        </button>
         <input
           type="file"
           accept=".json,application/json"
@@ -756,6 +762,31 @@ function SettingsPage() {
           />
           <button type="submit">Import JSON</button>
         </form>
+        {message ? <p>{message}</p> : null}
+      </div>
+    </section>
+  );
+}
+
+function SettingsPage() {
+  const { actions } = useLifeOs();
+  const [noteSearch, setNoteSearch] = useState("");
+  const [noteSearchResults, setNoteSearchResults] = useState<string[]>([]);
+
+  const runNoteSearch = async (event: FormEvent) => {
+    event.preventDefault();
+    setNoteSearchResults(await actions.searchNoteTitles(noteSearch));
+  };
+
+  return (
+    <section>
+      <h2>Settings</h2>
+      <div className="stack">
+        <p>Use dedicated routes for data tools:</p>
+        <div className="cards">
+          <Link to="/export">Open Export</Link>
+          <Link to="/import">Open Import</Link>
+        </div>
         <form className="stack" onSubmit={runNoteSearch}>
           <input
             value={noteSearch}
@@ -771,7 +802,6 @@ function SettingsPage() {
             </li>
           ))}
         </ul>
-        {message ? <p>{message}</p> : null}
       </div>
     </section>
   );
