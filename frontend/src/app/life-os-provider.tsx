@@ -12,6 +12,7 @@ interface LifeOsContextValue {
     completeTask: (taskId: string) => void;
     updateTaskStatus: (taskId: string, status: TaskStatus) => void;
     createWorkbook: (input: { name: string; metricLabel: string; metricValue: number }) => void;
+    addWorkbookMetric: (workbookId: string, metricLabel: string, metricValue: number) => void;
     syncNow: () => void;
     exportData: () => string;
     importData: (data: string) => { ok: true } | { ok: false; error: string };
@@ -80,6 +81,11 @@ export function LifeOsProvider({ children }: { children: ReactNode }) {
         },
         createWorkbook: (input) => {
           engineRef.current.createWorkbook(input);
+          refresh();
+          persist();
+        },
+        addWorkbookMetric: (workbookId, metricLabel, metricValue) => {
+          engineRef.current.addWorkbookMetric(workbookId, metricLabel, metricValue);
           refresh();
           persist();
         },

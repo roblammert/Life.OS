@@ -545,6 +545,23 @@ function StoragePage() {
                 </li>
               ))}
             </ul>
+            <form
+              className="stack"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = event.currentTarget;
+                const data = new FormData(form);
+                const label = String(data.get("metricLabel") ?? "").trim();
+                const value = Number(data.get("metricValue") ?? 0);
+                if (!label) return;
+                actions.addWorkbookMetric(workbook.id, label, value);
+                form.reset();
+              }}
+            >
+              <input name="metricLabel" placeholder="New metric label" />
+              <input name="metricValue" type="number" placeholder="New metric value" />
+              <button type="submit">Add Metric</button>
+            </form>
           </li>
         ))}
       </ul>

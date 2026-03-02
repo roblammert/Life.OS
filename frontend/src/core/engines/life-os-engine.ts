@@ -214,6 +214,35 @@ export class LifeOsEngine {
     this.enqueueSyncOperation("storage", workbook.id, "create", workbook);
   }
 
+  addWorkbookMetric(workbookId: string, metricLabel: string, metricValue: number): void {
+    const workbook = this.workbooks.find((item) => item.id === workbookId);
+    if (!workbook) return;
+    const metric = { id: createId("metric"), label: metricLabel, value: metricValue };
+    workbook.metrics.unshift(metric);
+    workbook.updatedAt = nowIso();
+    this.graphNodes.unshift({ id: metric.id, type: "metric", label: `${metric.label}: ${metric.value}` });
+    this.graphEdges.unshift({
+      id: createId("edge"),
+      source: workbook.id,
+      target: metric.id,
+      relationship: "derived_from",
+    });
+    this.timeline.unshift({
+      id: createId("event"),
+      module: "storage",
+      referenceId: workbook.id,
+      title: `Workbook metric added: ${workbook.name} (${metric.label})`,
+      eventType: "updated",
+      timestamp: nowIso(),
+    });
+    this.coach.createStorageInsight(workbook.id, {
+      name: workbook.name,
+      metricLabel: metric.label,
+      metricValue: metric.value,
+    });
+    this.enqueueSyncOperation("storage", workbook.id, "update", workbook);
+  }
+
   syncNow(): void {
     this.sync.markSyncing();
     this.syncQueue.clear();
