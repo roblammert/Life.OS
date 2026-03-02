@@ -387,6 +387,11 @@ function JournalPage() {
   const [content, setContent] = useState("");
   const [search, setSearch] = useState("");
   const [sentimentFilter, setSentimentFilter] = useState<"all" | "positive" | "neutral" | "negative">("all");
+  const exportFilteredMarkdown = () => {
+    if (displayedEntries.length === 0) return;
+    const markdown = displayedEntries.map((entry) => `## ${entry.title}\n\n${entry.contentMarkdown}\n`).join("\n");
+    downloadContent(markdown, "life-os-journal-filtered.md", "text/markdown");
+  };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -433,6 +438,12 @@ function JournalPage() {
           <option value="neutral">Neutral</option>
           <option value="negative">Negative</option>
         </select>
+        <button type="button" onClick={exportFilteredMarkdown} disabled={displayedEntries.length === 0}>
+          Export Filtered Markdown
+        </button>
+        <button type="button" onClick={() => { setSearch(""); setSentimentFilter("all"); }}>
+          Reset Filters
+        </button>
         <article className="card">Average sentiment: {averageSentiment.toFixed(2)}</article>
       </div>
       <ul className="stack">
@@ -458,6 +469,8 @@ function NotesPage() {
   const [content, setContent] = useState("");
   const [tagsInput, setTagsInput] = useState("");
   const [tagFilter, setTagFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "title">("newest");
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -473,8 +486,16 @@ function NotesPage() {
   };
 
   const displayedNotes = snapshot.notes.filter((note) => {
-    if (!tagFilter.trim()) return true;
-    return note.tags.some((tag) => tag.includes(tagFilter.trim().toLowerCase()));
+    const tagMatch = !tagFilter.trim() || note.tags.some((tag) => tag.includes(tagFilter.trim().toLowerCase()));
+    const textMatch =
+      !search.trim() ||
+      note.title.toLowerCase().includes(search.trim().toLowerCase()) ||
+      note.contentMarkdown.toLowerCase().includes(search.trim().toLowerCase());
+    return tagMatch && textMatch;
+  }).sort((a, b) => {
+    if (sortBy === "oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (sortBy === "title") return a.title.localeCompare(b.title);
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
   const createTaskFromNote = (noteTitle: string, noteContent: string) => {
@@ -498,16 +519,25 @@ function NotesPage() {
         />
         <button type="submit">Save Note</button>
       </form>
-      <input
-        value={tagFilter}
-        onChange={(event) => setTagFilter(event.target.value)}
-        placeholder="Filter notes by tag"
-      />
+      <div className="cards">
+        <input
+          value={tagFilter}
+          onChange={(event) => setTagFilter(event.target.value)}
+          placeholder="Filter notes by tag"
+        />
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search notes" />
+        <select value={sortBy} onChange={(event) => setSortBy(event.target.value as typeof sortBy)}>
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="title">Title</option>
+        </select>
+      </div>
       <ul className="stack">
         {displayedNotes.map((note) => (
           <li key={note.id} className="card">
             <strong>{note.title}</strong>
             <p>{note.contentMarkdown}</p>
+            <p>Words: {note.contentMarkdown.split(/\s+/).filter(Boolean).length}</p>
             {note.tags.length > 0 ? <p>Tags: {note.tags.join(", ")}</p> : null}
             <button onClick={() => createTaskFromNote(note.title, note.contentMarkdown)}>
               Create Task from Note
@@ -529,10 +559,16 @@ function TasksPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | TaskStatus>("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | TaskPriority>("all");
   const [sortBy, setSortBy] = useState<"created_desc" | "due_asc" | "priority_desc">("created_desc");
+  const [search, setSearch] = useState("");
   const now = Date.now();
   const filteredTasks = snapshot.tasks
     .filter((task) => (statusFilter === "all" ? true : task.status === statusFilter))
     .filter((task) => (priorityFilter === "all" ? true : task.priority === priorityFilter))
+    .filter((task) => {
+      if (!search.trim()) return true;
+      const value = search.trim().toLowerCase();
+      return task.title.toLowerCase().includes(value) || task.description.toLowerCase().includes(value);
+    })
     .sort((a, b) => {
       if (sortBy === "due_asc") {
         const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
@@ -572,6 +608,18 @@ function TasksPage() {
     setPriority("medium");
     setDueDate("");
   };
+  const markFilteredDone = () => {
+    filteredTasks
+      .filter((task) => task.status !== "done")
+      .forEach((task) => actions.updateTaskStatus(task.id, "done"));
+  };
+  const exportFilteredTasksCsv = () => {
+    const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const rows = filteredTasks.map((task) =>
+      [task.id, escape(task.title), escape(task.description), task.priority, task.status, task.dueDate ?? ""].join(","),
+    );
+    downloadContent(["id,title,description,priority,status,dueDate", ...rows].join("\n"), "life-os-tasks-filtered.csv", "text/csv");
+  };
 
   return (
     <section>
@@ -599,6 +647,13 @@ function TasksPage() {
           <option value="due_asc">Due Date</option>
           <option value="priority_desc">Priority</option>
         </select>
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks" />
+        <button type="button" onClick={markFilteredDone} disabled={filteredTasks.length === 0}>
+          Mark Filtered Done
+        </button>
+        <button type="button" onClick={exportFilteredTasksCsv} disabled={filteredTasks.length === 0}>
+          Export Filtered CSV
+        </button>
       </div>
       <div className="cards">
         <article className="card">
@@ -685,10 +740,15 @@ function StoragePage() {
   const [metricLabel, setMetricLabel] = useState("");
   const [metricValue, setMetricValue] = useState("0");
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"name_asc" | "name_desc" | "metrics_desc">("name_asc");
 
-  const displayedWorkbooks = snapshot.workbooks.filter((workbook) =>
-    workbook.name.toLowerCase().includes(search.trim().toLowerCase()),
-  );
+  const displayedWorkbooks = snapshot.workbooks
+    .filter((workbook) => workbook.name.toLowerCase().includes(search.trim().toLowerCase()))
+    .sort((a, b) => {
+      if (sortBy === "name_desc") return b.name.localeCompare(a.name);
+      if (sortBy === "metrics_desc") return b.metrics.length - a.metrics.length;
+      return a.name.localeCompare(b.name);
+    });
   const totalMetrics = displayedWorkbooks.reduce((acc, workbook) => acc + workbook.metrics.length, 0);
   const totalMetricValue = displayedWorkbooks.reduce(
     (acc, workbook) => acc + workbook.metrics.reduce((inner, metric) => inner + metric.value, 0),
@@ -724,6 +784,11 @@ function StoragePage() {
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search workbooks"
         />
+        <select value={sortBy} onChange={(event) => setSortBy(event.target.value as typeof sortBy)}>
+          <option value="name_asc">Name (A-Z)</option>
+          <option value="name_desc">Name (Z-A)</option>
+          <option value="metrics_desc">Most metrics</option>
+        </select>
         <article className="card">Visible workbooks: {displayedWorkbooks.length}</article>
         <article className="card">Metrics: {totalMetrics}</article>
         <article className="card">Avg metric value: {averageMetricValue.toFixed(2)}</article>
@@ -732,6 +797,12 @@ function StoragePage() {
         {displayedWorkbooks.map((workbook) => (
           <li key={workbook.id} className="card">
             <strong>{workbook.name}</strong>
+            <p>
+              Avg workbook metric:{" "}
+              {workbook.metrics.length > 0
+                ? (workbook.metrics.reduce((acc, metric) => acc + metric.value, 0) / workbook.metrics.length).toFixed(2)
+                : "0.00"}
+            </p>
             <ul>
               {workbook.metrics.map((metric) => (
                 <li key={metric.id}>
@@ -769,6 +840,8 @@ function CoachPage() {
   const [review, setReview] = useState<ReturnType<typeof actions.generateReview> | null>(null);
   const [lifeMoments, setLifeMoments] = useState<ReturnType<typeof actions.generateLifeMoments>>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [moduleFilter, setModuleFilter] = useState<"all" | "journal" | "notes" | "tasks" | "storage">("all");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     setNotifications(actions.generateNotifications());
@@ -807,6 +880,15 @@ function CoachPage() {
     );
     setMessage("Life Moments CSV export created.");
   };
+  const visibleInsights = snapshot.insights.filter((insight) => {
+    const moduleMatch = moduleFilter === "all" || insight.sourceModule === moduleFilter;
+    const textMatch = !search.trim() || insight.content.toLowerCase().includes(search.trim().toLowerCase());
+    return moduleMatch && textMatch;
+  });
+  const exportVisibleInsightsJson = () => {
+    downloadContent(JSON.stringify(visibleInsights, null, 2), "life-os-visible-insights.json", "application/json");
+    setMessage("Visible insights JSON export created.");
+  };
 
   return (
     <section>
@@ -816,6 +898,15 @@ function CoachPage() {
         <button onClick={() => setReview(actions.generateReview("weekly"))}>Generate Weekly Review</button>
         <button onClick={exportReviewMarkdown}>Export Review Markdown</button>
         <button onClick={exportLifeMomentsCsv}>Export Life Moments CSV</button>
+        <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value as typeof moduleFilter)}>
+          <option value="all">All modules</option>
+          <option value="journal">Journal</option>
+          <option value="notes">Notes</option>
+          <option value="tasks">Tasks</option>
+          <option value="storage">Storage</option>
+        </select>
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search insights" />
+        <button onClick={exportVisibleInsightsJson}>Export Visible Insights JSON</button>
       </div>
       {message ? <p>{message}</p> : null}
       {review ? (
@@ -850,7 +941,7 @@ function CoachPage() {
       </ul>
       <h3>Insights</h3>
       <ul className="stack">
-        {snapshot.insights.map((insight) => (
+        {visibleInsights.map((insight) => (
           <InsightCard key={insight.id} insight={insight} />
         ))}
       </ul>
@@ -860,6 +951,11 @@ function CoachPage() {
 
 function SyncPage() {
   const { snapshot, actions } = useLifeOs();
+  const [moduleFilter, setModuleFilter] = useState<"all" | "journal" | "notes" | "tasks" | "storage">("all");
+  const visibleQueue = snapshot.syncQueue.filter((operation) => moduleFilter === "all" || operation.module === moduleFilter);
+  const exportFilteredQueue = () => {
+    downloadContent(JSON.stringify(visibleQueue, null, 2), "life-os-sync-queue-filtered.json", "application/json");
+  };
   return (
     <section>
       <h2>Sync Status</h2>
@@ -871,9 +967,21 @@ function SyncPage() {
         </article>
       </div>
       <button onClick={actions.syncNow}>Sync Now</button>
+      <div className="cards">
+        <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value as typeof moduleFilter)}>
+          <option value="all">All modules</option>
+          <option value="journal">Journal</option>
+          <option value="notes">Notes</option>
+          <option value="tasks">Tasks</option>
+          <option value="storage">Storage</option>
+        </select>
+        <button onClick={exportFilteredQueue} disabled={visibleQueue.length === 0}>
+          Export Filtered Queue JSON
+        </button>
+      </div>
       <h3>Queue</h3>
       <ul className="stack">
-        {snapshot.syncQueue.map((operation) => (
+        {visibleQueue.map((operation) => (
           <li key={operation.id} className="card">
             [{operation.module}] {operation.operation} {operation.entityId} at {operation.createdAt}
           </li>
