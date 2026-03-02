@@ -91,6 +91,13 @@ function Layout() {
     tasks: "/tasks",
     storage: "/storage",
   };
+  const moduleResultCounts = results.reduce<Record<string, number>>((acc, result) => {
+    acc[result.module] = (acc[result.module] ?? 0) + 1;
+    return acc;
+  }, {});
+  const exportSearchResultsJson = () => {
+    downloadContent(JSON.stringify(results, null, 2), "life-os-search-results.json", "application/json");
+  };
 
   return (
     <div className={`app-shell theme-${theme} layout-${layoutMode}`}>
@@ -135,6 +142,12 @@ function Layout() {
       </form>
       <div className="cards">
         <article className="card">Search results: {results.length}</article>
+        <article className="card">
+          Modules: {Object.entries(moduleResultCounts).map(([module, count]) => `${module}:${count}`).join(", ") || "none"}
+        </article>
+        <button type="button" onClick={exportSearchResultsJson} disabled={results.length === 0}>
+          Export Search Results JSON
+        </button>
       </div>
       {results.length > 0 ? (
         <ul className="stack">
@@ -337,6 +350,14 @@ function DashboardPage() {
       "application/json",
     );
   };
+  const exportUpcomingTasksCsv = () => {
+    const rows = upcomingTasks.map((task) => `${task.id},"${task.title.replaceAll('"', '""')}",${task.dueDate ?? ""}`);
+    downloadContent(["id,title,dueDate", ...rows].join("\n"), "life-os-upcoming-tasks.csv", "text/csv");
+  };
+  const exportCompletedTasksCsv = () => {
+    const rows = recentCompletedTasks.map((task) => `${task.id},"${task.title.replaceAll('"', '""')}",${task.updatedAt}`);
+    downloadContent(["id,title,updatedAt", ...rows].join("\n"), "life-os-completed-tasks.csv", "text/csv");
+  };
 
   useEffect(() => {
     void (async () => {
@@ -392,6 +413,12 @@ function DashboardPage() {
           Top pending sync module: {pendingSyncByModule ? `${pendingSyncByModule[0]} (${pendingSyncByModule[1]})` : "n/a"}
         </article>
         <button type="button" onClick={exportSnapshotSummaryJson}>Export Snapshot Summary JSON</button>
+        <button type="button" onClick={exportUpcomingTasksCsv} disabled={upcomingTasks.length === 0}>
+          Export Upcoming Tasks CSV
+        </button>
+        <button type="button" onClick={exportCompletedTasksCsv} disabled={recentCompletedTasks.length === 0}>
+          Export Completed Tasks CSV
+        </button>
       </div>
       <h3>Recent Journal Entries (DB query)</h3>
       <ul className="stack">
@@ -481,6 +508,9 @@ function JournalPage() {
       [entry.id, escape(entry.title), escape(entry.contentMarkdown), entry.sentimentScore.toFixed(2), entry.createdAt].join(","),
     );
     downloadContent(["id,title,content,sentiment,createdAt", ...rows].join("\n"), "life-os-journal-filtered.csv", "text/csv");
+  };
+  const exportVisibleTitlesTxt = () => {
+    downloadContent(displayedEntries.map((entry) => entry.title).join("\n"), "life-os-journal-titles.txt", "text/plain");
   };
 
   const onSubmit = (event: FormEvent) => {
@@ -578,8 +608,14 @@ function JournalPage() {
         <button type="button" onClick={exportFilteredCsv} disabled={displayedEntries.length === 0}>
           Export Filtered CSV
         </button>
+        <button type="button" onClick={exportVisibleTitlesTxt} disabled={displayedEntries.length === 0}>
+          Export Visible Titles TXT
+        </button>
         <button type="button" onClick={() => { setSearch(""); setSentimentFilter("all"); }}>
           Reset Filters
+        </button>
+        <button type="button" onClick={() => { setTitle(""); setContent(""); setMoodTagInput(""); }}>
+          Clear Draft
         </button>
         <article className="card">Visible entries: {displayedEntries.length}</article>
         <article className="card">Visible words: {totalVisibleWords}</article>
@@ -614,6 +650,7 @@ function NotesPage() {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "title">("newest");
   const [previewMode, setPreviewMode] = useState(false);
+  const [quickTag, setQuickTag] = useState("");
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -649,6 +686,7 @@ function NotesPage() {
   )
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
+  const visibleWords = displayedNotes.reduce((acc, note) => acc + note.contentMarkdown.split(/\s+/).filter(Boolean).length, 0);
   const exportFilteredNotesMarkdown = () => {
     const content = displayedNotes.map((note) => `## ${note.title}\n\n${note.contentMarkdown}\n`).join("\n");
     downloadContent(content, "life-os-notes-filtered.md", "text/markdown");
@@ -699,11 +737,13 @@ function NotesPage() {
         <button type="button" onClick={() => setPreviewMode((current) => !current)}>
           {previewMode ? "Hide Preview" : "Show Preview"}
         </button>
+        <input value={quickTag} onChange={(event) => setQuickTag(event.target.value)} placeholder="Quick tag append" />
         <button type="button" onClick={() => { setTagFilter(""); setSearch(""); setSortBy("newest"); }}>
           Reset Filters
         </button>
         <article className="card">Visible notes: {displayedNotes.length}</article>
         <article className="card">Unique tags: {uniqueTagCount}</article>
+        <article className="card">Visible words: {visibleWords}</article>
       </div>
       <ul className="stack">
         {displayedNotes.map((note) => (
@@ -715,6 +755,19 @@ function NotesPage() {
             {note.tags.length > 0 ? <p>Tags: {note.tags.join(", ")}</p> : null}
             <button type="button" onClick={() => void navigator.clipboard?.writeText(note.contentMarkdown)}>
               Copy Content
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                actions.createNote({
+                  title: note.title,
+                  contentMarkdown: note.contentMarkdown,
+                  tags: [...note.tags, quickTag.trim().toLowerCase()].filter((tag) => tag.length > 0),
+                })
+              }
+              disabled={!quickTag.trim()}
+            >
+              Append Tag Copy
             </button>
             <button onClick={() => createTaskFromNote(note.title, note.contentMarkdown)}>
               Create Task from Note
@@ -843,6 +896,9 @@ function TasksPage() {
     };
     downloadContent(JSON.stringify(payload, null, 2), "life-os-tasks-by-status.json", "application/json");
   };
+  const exportVisibleTitlesTxt = () => {
+    downloadContent(filteredTasks.map((task) => task.title).join("\n"), "life-os-tasks-titles.txt", "text/plain");
+  };
   const markFilteredInProgress = () => {
     filteredTasks
       .filter((task) => task.status === "todo" || task.status === "blocked")
@@ -900,6 +956,9 @@ function TasksPage() {
         <button type="button" onClick={exportTasksByStatusJson} disabled={filteredTasks.length === 0}>
           Export By Status JSON
         </button>
+        <button type="button" onClick={exportVisibleTitlesTxt} disabled={filteredTasks.length === 0}>
+          Export Titles TXT
+        </button>
         <button type="button" onClick={() => { setStatusFilter("all"); setPriorityFilter("all"); setDueFilter("all"); setSortBy("created_desc"); setSearch(""); }}>
           Reset Filters
         </button>
@@ -932,6 +991,10 @@ function TasksPage() {
         <article className="card">
           <strong>Active Filters</strong>
           <p>{activeTaskFilters.join(", ") || "none"}</p>
+        </article>
+        <article className="card">
+          <strong>Visible Tasks</strong>
+          <p>{filteredTasks.length}</p>
         </article>
       </div>
       <form className="stack" onSubmit={onSubmit}>
@@ -978,6 +1041,19 @@ function TasksPage() {
                 <option value="blocked">blocked</option>
                 <option value="done">done</option>
               </select>
+              <button
+                type="button"
+                onClick={() =>
+                  actions.createTask({
+                    title: `${task.title} (copy)`,
+                    description: task.description,
+                    priority: task.priority,
+                    dueDate: task.dueDate,
+                  })
+                }
+              >
+                Duplicate
+              </button>
             </li>
           ))}
         </ul>
@@ -1066,6 +1142,10 @@ function StoragePage() {
     );
     downloadContent(["workbookId,workbookName,metricLabel,metricValue", ...rows].join("\n"), "life-os-storage-metrics.csv", "text/csv");
   };
+  const averageMetricsPerWorkbook = displayedWorkbooks.length > 0 ? totalMetrics / displayedWorkbooks.length : 0;
+  const exportVisibleWorkbookNamesTxt = () => {
+    downloadContent(displayedWorkbooks.map((workbook) => workbook.name).join("\n"), "life-os-workbook-names.txt", "text/plain");
+  };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -1114,11 +1194,15 @@ function StoragePage() {
           Top workbook metric total:{" "}
           {topWorkbookMetricTotal ? `${topWorkbookMetricTotal.name} (${topWorkbookMetricTotal.total})` : "n/a"}
         </article>
+        <article className="card">Avg metrics/workbook: {averageMetricsPerWorkbook.toFixed(2)}</article>
         <button type="button" onClick={exportVisibleWorkbooksJson} disabled={displayedWorkbooks.length === 0}>
           Export Visible Workbooks JSON
         </button>
         <button type="button" onClick={exportMetricsCsv} disabled={displayedWorkbooks.length === 0}>
           Export Metrics CSV
+        </button>
+        <button type="button" onClick={exportVisibleWorkbookNamesTxt} disabled={displayedWorkbooks.length === 0}>
+          Export Workbook Names TXT
         </button>
         <button type="button" onClick={() => { setSearch(""); setMetricSearch(""); setSortBy("name_asc"); }}>
           Reset Filters
@@ -1174,6 +1258,7 @@ function CoachPage() {
   const [moduleFilter, setModuleFilter] = useState<"all" | "journal" | "notes" | "tasks" | "storage">("all");
   const [search, setSearch] = useState("");
   const [notificationSearch, setNotificationSearch] = useState("");
+  const [lifeMomentSearch, setLifeMomentSearch] = useState("");
 
   useEffect(() => {
     setNotifications(actions.generateNotifications());
@@ -1245,6 +1330,19 @@ function CoachPage() {
       notification.message.toLowerCase().includes(value)
     );
   });
+  const visibleLifeMoments = lifeMoments.filter((moment) => {
+    if (!lifeMomentSearch.trim()) return true;
+    const value = lifeMomentSearch.trim().toLowerCase();
+    return moment.title.toLowerCase().includes(value) || moment.description.toLowerCase().includes(value);
+  });
+  const exportVisibleInsightsCsv = () => {
+    const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const rows = visibleInsights.map((insight) =>
+      [insight.id, insight.sourceModule, insight.insightType, escape(insight.content)].join(","),
+    );
+    downloadContent(["id,module,type,content", ...rows].join("\n"), "life-os-insights-visible.csv", "text/csv");
+    setMessage("Visible insights CSV export created.");
+  };
 
   return (
     <section>
@@ -1266,12 +1364,14 @@ function CoachPage() {
         </select>
         <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search insights" />
         <input value={notificationSearch} onChange={(event) => setNotificationSearch(event.target.value)} placeholder="Search notifications" />
+        <input value={lifeMomentSearch} onChange={(event) => setLifeMomentSearch(event.target.value)} placeholder="Search life moments" />
         <button onClick={exportVisibleInsightsJson}>Export Visible Insights JSON</button>
+        <button onClick={exportVisibleInsightsCsv}>Export Visible Insights CSV</button>
         <button onClick={exportVisibleNotificationsCsv}>Export Visible Notifications CSV</button>
         <button onClick={() => setMessage(null)}>Clear Message</button>
         <article className="card">Visible insights: {visibleInsights.length}</article>
         <article className="card">Visible notifications: {visibleNotifications.length}</article>
-        <article className="card">Visible life moments: {lifeMoments.length}</article>
+        <article className="card">Visible life moments: {visibleLifeMoments.length}</article>
       </div>
       {message ? <p>{message}</p> : null}
       {review ? (
@@ -1296,7 +1396,7 @@ function CoachPage() {
       </ul>
       <h3>Life Moments Feed</h3>
       <ul className="stack">
-        {lifeMoments.map((moment) => (
+        {visibleLifeMoments.map((moment) => (
           <li key={moment.id} className="card">
             <strong>{moment.date} — {moment.title}</strong>
             <p>{moment.description}</p>
@@ -1396,6 +1496,7 @@ function SyncPage() {
         ))}
         <article className="card">Oldest visible item age: {oldestQueueAgeMinutes}m</article>
         <article className="card">Newest visible item age: {newestQueueAgeMinutes}m</article>
+        <article className="card">Oldest visible item age: {(oldestQueueAgeMinutes / 60).toFixed(1)}h</article>
       </div>
       <h3>Queue</h3>
       <ul className="stack">
@@ -1540,6 +1641,9 @@ function TimelinePage() {
   const exportBucketCountsJson = () => {
     downloadContent(JSON.stringify(groupedCounts, null, 2), `life-os-timeline-buckets-${timelineView}.json`, "application/json");
   };
+  const exportModuleCountsJson = () => {
+    downloadContent(JSON.stringify(moduleCounts, null, 2), `life-os-timeline-modules-${timelineView}.json`, "application/json");
+  };
   const exportVisibleTitlesTxt = () => {
     downloadContent(sortedFiltered.map((event) => event.title).join("\n"), `life-os-timeline-titles-${timelineView}.txt`, "text/plain");
   };
@@ -1594,7 +1698,11 @@ function TimelinePage() {
         <button onClick={exportFilteredTimelineJson}>Export Filtered Timeline JSON</button>
         <button onClick={exportTimelineSummaryMarkdown}>Export Timeline Summary MD</button>
         <button onClick={exportBucketCountsJson}>Export Bucket Counts JSON</button>
+        <button onClick={exportModuleCountsJson}>Export Module Counts JSON</button>
         <button onClick={exportVisibleTitlesTxt}>Export Visible Titles TXT</button>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(sortedFiltered[0]?.title ?? "")} disabled={sortedFiltered.length === 0}>
+          Copy First Title
+        </button>
         <article className="card">Created: {eventTypeCounts.created ?? 0}</article>
         <article className="card">Updated: {eventTypeCounts.updated ?? 0}</article>
         <article className="card">Completed: {eventTypeCounts.completed ?? 0}</article>
@@ -1700,6 +1808,9 @@ function GraphPage() {
   const exportRelationshipCountsJson = () => {
     downloadContent(JSON.stringify(edgeClusters, null, 2), "life-os-graph-relationship-counts.json", "application/json");
   };
+  const exportVisibleNodesJson = () => {
+    downloadContent(JSON.stringify(visibleNodes, null, 2), "life-os-graph-visible-nodes.json", "application/json");
+  };
 
   return (
     <section>
@@ -1733,6 +1844,7 @@ function GraphPage() {
         <button type="button" onClick={exportFilteredGraphJson}>Export Filtered Graph JSON</button>
         <button type="button" onClick={exportFilteredEdgesCsv}>Export Filtered Edges CSV</button>
         <button type="button" onClick={exportVisibleNodeLabelsCsv}>Export Visible Nodes CSV</button>
+        <button type="button" onClick={exportVisibleNodesJson}>Export Visible Nodes JSON</button>
         <button type="button" onClick={exportRelationshipCountsJson}>Export Relationship Counts JSON</button>
         <button type="button" onClick={() => { setNodeTypeFilter("all"); setRelationshipFilter("all"); setSearch(""); setEdgeSearch(""); setHideIsolated(false); }}>
           Reset Filters
@@ -2055,6 +2167,12 @@ function SettingsPage() {
     sessionStorage.removeItem("life-os-search-cache");
     localStorage.removeItem("life-os-search-cache");
   };
+  const quickStateReset = () => {
+    setNoteSearch("");
+    setNoteSearchResults([]);
+    setOpenTaskCount(null);
+    setRecentJournalTitles([]);
+  };
   const exportSearchResultsJson = () => {
     downloadContent(JSON.stringify(noteSearchResults, null, 2), "life-os-note-search-results.json", "application/json");
   };
@@ -2075,6 +2193,9 @@ function SettingsPage() {
         </button>
         <button type="button" onClick={exportSearchResultsJson} disabled={noteSearchResults.length === 0}>
           Export Search Results JSON
+        </button>
+        <button type="button" onClick={quickStateReset}>
+          Quick State Reset
         </button>
         <div className="cards">
           <Link to="/export">Open Export</Link>
