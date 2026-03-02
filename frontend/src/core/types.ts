@@ -53,6 +53,8 @@ export interface CoachInsight {
   sourceId: string;
   insightType: "summary" | "pattern" | "suggestion";
   content: string;
+  actions: string[];
+  promptUsed?: string;
   createdAt: string;
 }
 

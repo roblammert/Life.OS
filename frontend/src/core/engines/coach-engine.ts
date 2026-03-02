@@ -1,18 +1,20 @@
 import type { CoachInsight, ModuleName } from "../types";
 import { createId, nowIso } from "../utils";
-import { PromptEngine } from "../../lib/llm/prompt-engine";
+import { PromptEngine, type PromptInsightPayload } from "../../lib/llm/prompt-engine";
 
 export class CoachEngine {
   private insights: CoachInsight[] = [];
   private readonly promptEngine = new PromptEngine();
 
-  createInsight(sourceModule: ModuleName, sourceId: string, content: string): CoachInsight {
+  createInsight(sourceModule: ModuleName, sourceId: string, payload: PromptInsightPayload): CoachInsight {
     const insight: CoachInsight = {
       id: createId("insight"),
       sourceModule,
       sourceId,
       insightType: "summary",
-      content,
+      content: payload.content,
+      actions: payload.actions,
+      promptUsed: payload.promptUsed,
       createdAt: nowIso(),
     };
     this.insights.unshift(insight);
@@ -24,7 +26,10 @@ export class CoachEngine {
   }
 
   hydrateInsights(insights: CoachInsight[]): void {
-    this.insights = [...insights];
+    this.insights = insights.map((insight) => ({
+      ...insight,
+      actions: insight.actions ?? [],
+    }));
   }
 
   createJournalInsight(sourceId: string, input: { date: string; title: string; content: string }): CoachInsight {

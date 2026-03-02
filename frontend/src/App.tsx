@@ -227,6 +227,13 @@ function CoachPage() {
         {snapshot.insights.map((insight) => (
           <li key={insight.id} className="card">
             <strong>{insight.sourceModule}</strong>: {insight.content}
+            {insight.actions.length > 0 ? (
+              <ul>
+                {insight.actions.map((action) => (
+                  <li key={action}>{action}</li>
+                ))}
+              </ul>
+            ) : null}
           </li>
         ))}
       </ul>
