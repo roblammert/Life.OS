@@ -790,6 +790,18 @@ function TimelinePage() {
     .sort((a, b) => b[0].localeCompare(a[0]))
     .slice(0, 5);
   const topModules = Object.entries(moduleCounts).sort((a, b) => b[1] - a[1]);
+  const exportFilteredTimelineCsv = () => {
+    const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const header = "id,module,eventType,timestamp,title";
+    const rows = filtered.map((event) =>
+      [event.id, event.module, event.eventType, event.timestamp, escape(event.title)].join(","),
+    );
+    downloadContent(
+      [header, ...rows].join("\n"),
+      `life-os-timeline-${timelineView}.csv`,
+      "text/csv",
+    );
+  };
 
   return (
     <section>
@@ -819,6 +831,7 @@ function TimelinePage() {
       <div className="cards">
         <article className="card">Filtered events: {filtered.length}</article>
         <article className="card">Distinct {timelineView} periods: {Object.keys(groupedCounts).length}</article>
+        <button onClick={exportFilteredTimelineCsv}>Export Filtered Timeline CSV</button>
       </div>
       <h3>Recent {timelineView} Activity</h3>
       <ul className="stack">
