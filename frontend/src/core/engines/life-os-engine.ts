@@ -25,6 +25,18 @@ export interface LifeOsSnapshot {
   syncStatus: ReturnType<SyncEngine["getStatus"]>;
 }
 
+export interface PersistedLifeOsState {
+  journalEntries: JournalEntry[];
+  notes: NoteItem[];
+  tasks: TaskItem[];
+  workbooks: Workbook[];
+  timeline: TimelineEvent[];
+  graphNodes: LifeGraphNode[];
+  graphEdges: LifeGraphEdge[];
+  insights: ReturnType<CoachEngine["listInsights"]>;
+  lastSyncedAt?: string;
+}
+
 export class LifeOsEngine {
   private readonly coach = new CoachEngine();
   private readonly sync = new SyncEngine();
@@ -35,6 +47,18 @@ export class LifeOsEngine {
   private timeline: TimelineEvent[] = [];
   private graphNodes: LifeGraphNode[] = [];
   private graphEdges: LifeGraphEdge[] = [];
+
+  hydrateFromPersistedState(state: PersistedLifeOsState): void {
+    this.journalEntries = [...state.journalEntries];
+    this.notes = [...state.notes];
+    this.tasks = [...state.tasks];
+    this.workbooks = [...state.workbooks];
+    this.timeline = [...state.timeline];
+    this.graphNodes = [...state.graphNodes];
+    this.graphEdges = [...state.graphEdges];
+    this.coach.hydrateInsights(state.insights);
+    this.sync.hydrate(state.lastSyncedAt);
+  }
 
   createJournalEntry(input: { title: string; contentMarkdown: string }): void {
     const entry: JournalEntry = {
@@ -171,6 +195,20 @@ export class LifeOsEngine {
       graphEdges: [...this.graphEdges],
       insights: this.coach.listInsights(),
       syncStatus: this.sync.getStatus(),
+    };
+  }
+
+  getPersistedState(): PersistedLifeOsState {
+    return {
+      journalEntries: [...this.journalEntries],
+      notes: [...this.notes],
+      tasks: [...this.tasks],
+      workbooks: [...this.workbooks],
+      timeline: [...this.timeline],
+      graphNodes: [...this.graphNodes],
+      graphEdges: [...this.graphEdges],
+      insights: this.coach.listInsights(),
+      lastSyncedAt: this.sync.getStatus().lastSyncedAt,
     };
   }
 }

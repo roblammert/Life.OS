@@ -14,6 +14,10 @@ export class SyncEngine {
     this.status = { state: "idle", lastSyncedAt: new Date().toISOString() };
   }
 
+  hydrate(lastSyncedAt?: string): void {
+    this.status = { state: "idle", lastSyncedAt };
+  }
+
   getStatus(): SyncStatus {
     return { ...this.status };
   }

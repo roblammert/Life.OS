@@ -1,26 +1,33 @@
-export class IndexedDbGateway {
-  private readonly stores = new Map<string, Map<string, unknown>>();
+import Dexie, { type Table } from "dexie";
 
-  put<T>(storeName: string, id: string, value: T): void {
-    const store = this.ensureStore(storeName);
-    store.set(id, value);
+interface AppStateRecord<TState> {
+  id: "app";
+  state: TState;
+  updatedAt: string;
+}
+
+export class IndexedDbGateway extends Dexie {
+  private appState!: Table<AppStateRecord<unknown>, "app">;
+
+  constructor() {
+    super("life_os_frontend");
+    this.version(1).stores({
+      appState: "id, updatedAt",
+    });
+    this.appState = this.table("appState");
   }
 
-  list<T>(storeName: string): T[] {
-    const store = this.ensureStore(storeName);
-    return Array.from(store.values()) as T[];
+  async saveAppState<TState>(state: TState): Promise<void> {
+    await this.appState.put({
+      id: "app",
+      state,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
-  delete(storeName: string, id: string): void {
-    const store = this.ensureStore(storeName);
-    store.delete(id);
-  }
-
-  private ensureStore(storeName: string): Map<string, unknown> {
-    const existing = this.stores.get(storeName);
-    if (existing) return existing;
-    const created = new Map<string, unknown>();
-    this.stores.set(storeName, created);
-    return created;
+  async loadAppState<TState>(): Promise<TState | null> {
+    const record = await this.appState.get("app");
+    return (record?.state as TState | undefined) ?? null;
   }
 }
+

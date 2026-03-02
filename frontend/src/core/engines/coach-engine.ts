@@ -20,5 +20,9 @@ export class CoachEngine {
   listInsights(): CoachInsight[] {
     return [...this.insights];
   }
+
+  hydrateInsights(insights: CoachInsight[]): void {
+    this.insights = [...insights];
+  }
 }
 
