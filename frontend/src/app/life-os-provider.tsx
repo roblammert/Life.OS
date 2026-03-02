@@ -8,7 +8,7 @@ interface LifeOsContextValue {
   actions: {
     createJournalEntry: (input: { title: string; contentMarkdown: string }) => void;
     createNote: (input: { title: string; contentMarkdown: string }) => void;
-    createTask: (input: { title: string; description: string; priority: TaskPriority }) => void;
+    createTask: (input: { title: string; description: string; priority: TaskPriority; dueDate?: string }) => void;
     completeTask: (taskId: string) => void;
     updateTaskStatus: (taskId: string, status: TaskStatus) => void;
     createWorkbook: (input: { name: string; metricLabel: string; metricValue: number }) => void;

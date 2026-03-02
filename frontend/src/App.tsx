@@ -259,6 +259,8 @@ function DashboardPage() {
   const [recentTitles, setRecentTitles] = useState<string[]>([]);
   const [taskStatusCounts, setTaskStatusCounts] = useState<Record<string, number>>({});
   const [moduleActivity, setModuleActivity] = useState<Record<string, number>>({});
+  const [overdueCount, setOverdueCount] = useState(0);
+  const [upcomingCount, setUpcomingCount] = useState(0);
 
   useEffect(() => {
     void (async () => {
@@ -278,6 +280,21 @@ function DashboardPage() {
       return acc;
     }, {});
     setModuleActivity(activity);
+
+    const now = Date.now();
+    const next3Days = now + 3 * 24 * 60 * 60 * 1000;
+    const overdue = snapshot.tasks.filter(
+      (task) => task.dueDate && new Date(task.dueDate).getTime() < now && task.status !== "done",
+    ).length;
+    const upcoming = snapshot.tasks.filter(
+      (task) =>
+        task.dueDate &&
+        new Date(task.dueDate).getTime() >= now &&
+        new Date(task.dueDate).getTime() <= next3Days &&
+        task.status !== "done",
+    ).length;
+    setOverdueCount(overdue);
+    setUpcomingCount(upcoming);
   }, [actions, snapshot]);
 
   return (
@@ -289,6 +306,8 @@ function DashboardPage() {
         <article className="card">Tasks: {snapshot.tasks.length}</article>
         <article className="card">Workbooks: {snapshot.workbooks.length}</article>
         <article className="card">Open Tasks (DB query): {openTaskCount}</article>
+        <article className="card">Overdue Tasks: {overdueCount}</article>
+        <article className="card">Due in 3 Days: {upcomingCount}</article>
       </div>
       <h3>Recent Journal Entries (DB query)</h3>
       <ul className="stack">
@@ -397,6 +416,7 @@ function TasksPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
+  const [dueDate, setDueDate] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
 
   const onSubmit = (event: FormEvent) => {
@@ -406,10 +426,12 @@ function TasksPage() {
       title: title.trim(),
       description: description.trim(),
       priority,
+      dueDate: dueDate || undefined,
     });
     setTitle("");
     setDescription("");
     setPriority("medium");
+    setDueDate("");
   };
 
   return (
@@ -429,6 +451,7 @@ function TasksPage() {
           <option value="medium">Medium</option>
           <option value="high">High</option>
         </select>
+        <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
         <button type="submit">Create Task</button>
       </form>
       {viewMode === "list" ? (
@@ -437,6 +460,7 @@ function TasksPage() {
             <li key={task.id} className="card">
               <strong>{task.title}</strong> — {task.status} ({task.priority})
               <p>{task.description}</p>
+              <p>Due: {task.dueDate ?? "n/a"}</p>
               <select
                 value={task.status}
                 onChange={(event) => actions.updateTaskStatus(task.id, event.target.value as TaskStatus)}
@@ -461,6 +485,7 @@ function TasksPage() {
                     <li key={task.id} className="card">
                       <strong>{task.title}</strong> ({task.priority})
                       <p>{task.description}</p>
+                      <p>Due: {task.dueDate ?? "n/a"}</p>
                       <select
                         value={task.status}
                         onChange={(event) => actions.updateTaskStatus(task.id, event.target.value as TaskStatus)}
