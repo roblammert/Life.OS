@@ -492,9 +492,27 @@ function TasksPage() {
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [dueDate, setDueDate] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
+  const [statusFilter, setStatusFilter] = useState<"all" | TaskStatus>("all");
+  const [priorityFilter, setPriorityFilter] = useState<"all" | TaskPriority>("all");
+  const [sortBy, setSortBy] = useState<"created_desc" | "due_asc" | "priority_desc">("created_desc");
   const now = Date.now();
+  const filteredTasks = snapshot.tasks
+    .filter((task) => (statusFilter === "all" ? true : task.status === statusFilter))
+    .filter((task) => (priorityFilter === "all" ? true : task.priority === priorityFilter))
+    .sort((a, b) => {
+      if (sortBy === "due_asc") {
+        const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+        const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+        return aDue - bDue;
+      }
+      if (sortBy === "priority_desc") {
+        const rank = { high: 3, medium: 2, low: 1 };
+        return rank[b.priority] - rank[a.priority];
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
   const nextTask =
-    snapshot.tasks
+    filteredTasks
       .filter((task) => task.status !== "done")
       .sort((a, b) => {
         const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
@@ -529,6 +547,24 @@ function TasksPage() {
           <option value="list">List View</option>
           <option value="kanban">Kanban View</option>
         </select>
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
+          <option value="all">All statuses</option>
+          <option value="todo">todo</option>
+          <option value="in_progress">in_progress</option>
+          <option value="blocked">blocked</option>
+          <option value="done">done</option>
+        </select>
+        <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as typeof priorityFilter)}>
+          <option value="all">All priorities</option>
+          <option value="high">high</option>
+          <option value="medium">medium</option>
+          <option value="low">low</option>
+        </select>
+        <select value={sortBy} onChange={(event) => setSortBy(event.target.value as typeof sortBy)}>
+          <option value="created_desc">Newest</option>
+          <option value="due_asc">Due Date</option>
+          <option value="priority_desc">Priority</option>
+        </select>
       </div>
       <div className="cards">
         <article className="card">
@@ -557,7 +593,7 @@ function TasksPage() {
       </form>
       {viewMode === "list" ? (
         <ul className="stack">
-          {snapshot.tasks.map((task) => (
+          {filteredTasks.map((task) => (
             <li key={task.id} className="card">
               <strong>{task.title}</strong> — {task.status} ({task.priority})
               <p>{task.description}</p>
@@ -581,6 +617,8 @@ function TasksPage() {
               <h3>{status.replace("_", " ")}</h3>
               <ul className="stack">
                 {snapshot.tasks
+                  .filter((task) => (statusFilter === "all" ? true : task.status === statusFilter))
+                  .filter((task) => (priorityFilter === "all" ? true : task.priority === priorityFilter))
                   .filter((task) => task.status === status)
                   .map((task) => (
                     <li key={task.id} className="card">
