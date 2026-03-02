@@ -413,6 +413,7 @@ function JournalPage() {
   const [content, setContent] = useState("");
   const [search, setSearch] = useState("");
   const [sentimentFilter, setSentimentFilter] = useState<"all" | "positive" | "neutral" | "negative">("all");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
   const journalTemplates = [
     "What went well today?",
     "What challenged me today?",
@@ -423,6 +424,13 @@ function JournalPage() {
     const markdown = displayedEntries.map((entry) => `## ${entry.title}\n\n${entry.contentMarkdown}\n`).join("\n");
     downloadContent(markdown, "life-os-journal-filtered.md", "text/markdown");
   };
+  const exportFilteredCsv = () => {
+    const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const rows = displayedEntries.map((entry) =>
+      [entry.id, escape(entry.title), escape(entry.contentMarkdown), entry.sentimentScore.toFixed(2), entry.createdAt].join(","),
+    );
+    downloadContent(["id,title,content,sentiment,createdAt", ...rows].join("\n"), "life-os-journal-filtered.csv", "text/csv");
+  };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -432,17 +440,23 @@ function JournalPage() {
     setContent("");
   };
 
-  const displayedEntries = snapshot.journalEntries.filter((entry) => {
-    const textMatch =
-      search.trim() === "" ||
-      entry.title.toLowerCase().includes(search.toLowerCase()) ||
-      entry.contentMarkdown.toLowerCase().includes(search.toLowerCase());
-    if (!textMatch) return false;
-    if (sentimentFilter === "all") return true;
-    if (sentimentFilter === "positive") return entry.sentimentScore > 0.15;
-    if (sentimentFilter === "negative") return entry.sentimentScore < -0.15;
-    return entry.sentimentScore >= -0.15 && entry.sentimentScore <= 0.15;
-  });
+  const displayedEntries = snapshot.journalEntries
+    .filter((entry) => {
+      const textMatch =
+        search.trim() === "" ||
+        entry.title.toLowerCase().includes(search.toLowerCase()) ||
+        entry.contentMarkdown.toLowerCase().includes(search.toLowerCase());
+      if (!textMatch) return false;
+      if (sentimentFilter === "all") return true;
+      if (sentimentFilter === "positive") return entry.sentimentScore > 0.15;
+      if (sentimentFilter === "negative") return entry.sentimentScore < -0.15;
+      return entry.sentimentScore >= -0.15 && entry.sentimentScore <= 0.15;
+    })
+    .sort((a, b) =>
+      sortBy === "newest"
+        ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
 
   const averageSentiment =
     displayedEntries.length > 0
@@ -476,8 +490,15 @@ function JournalPage() {
           <option value="neutral">Neutral</option>
           <option value="negative">Negative</option>
         </select>
+        <select value={sortBy} onChange={(event) => setSortBy(event.target.value as typeof sortBy)}>
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+        </select>
         <button type="button" onClick={exportFilteredMarkdown} disabled={displayedEntries.length === 0}>
           Export Filtered Markdown
+        </button>
+        <button type="button" onClick={exportFilteredCsv} disabled={displayedEntries.length === 0}>
+          Export Filtered CSV
         </button>
         <button type="button" onClick={() => { setSearch(""); setSentimentFilter("all"); }}>
           Reset Filters
@@ -578,6 +599,10 @@ function NotesPage() {
         <button type="button" onClick={exportFilteredNotesMarkdown} disabled={displayedNotes.length === 0}>
           Export Filtered Markdown
         </button>
+        <button type="button" onClick={() => { setTagFilter(""); setSearch(""); setSortBy("newest"); }}>
+          Reset Filters
+        </button>
+        <article className="card">Visible notes: {displayedNotes.length}</article>
         <article className="card">Unique tags: {uniqueTagCount}</article>
       </div>
       <ul className="stack">
@@ -606,16 +631,22 @@ function TasksPage() {
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
   const [statusFilter, setStatusFilter] = useState<"all" | TaskStatus>("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | TaskPriority>("all");
+  const [dueFilter, setDueFilter] = useState<"all" | "overdue" | "next7" | "no_due">("all");
   const [sortBy, setSortBy] = useState<"created_desc" | "due_asc" | "priority_desc">("created_desc");
   const [search, setSearch] = useState("");
-  const doneRate =
-    filteredTasks.length > 0
-      ? (filteredTasks.filter((task) => task.status === "done").length / filteredTasks.length) * 100
-      : 0;
   const now = Date.now();
+  const next7Days = now + 7 * 24 * 60 * 60 * 1000;
   const filteredTasks = snapshot.tasks
     .filter((task) => (statusFilter === "all" ? true : task.status === statusFilter))
     .filter((task) => (priorityFilter === "all" ? true : task.priority === priorityFilter))
+    .filter((task) => {
+      if (dueFilter === "all") return true;
+      if (dueFilter === "no_due") return !task.dueDate;
+      if (!task.dueDate) return false;
+      const due = new Date(task.dueDate).getTime();
+      if (dueFilter === "overdue") return due < now && task.status !== "done";
+      return due >= now && due <= next7Days;
+    })
     .filter((task) => {
       if (!search.trim()) return true;
       const value = search.trim().toLowerCase();
@@ -633,6 +664,14 @@ function TasksPage() {
       }
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
+  const doneRate =
+    filteredTasks.length > 0
+      ? (filteredTasks.filter((task) => task.status === "done").length / filteredTasks.length) * 100
+      : 0;
+  const filteredPriorityCounts = filteredTasks.reduce<Record<string, number>>((acc, task) => {
+    acc[task.priority] = (acc[task.priority] ?? 0) + 1;
+    return acc;
+  }, {});
   const nextTask =
     filteredTasks
       .filter((task) => task.status !== "done")
@@ -672,6 +711,10 @@ function TasksPage() {
     );
     downloadContent(["id,title,description,priority,status,dueDate", ...rows].join("\n"), "life-os-tasks-filtered.csv", "text/csv");
   };
+  const exportFilteredTasksMarkdown = () => {
+    const lines = filteredTasks.map((task) => `- [${task.status === "done" ? "x" : " "}] ${task.title} (${task.priority})`);
+    downloadContent(["# Filtered Tasks", ...lines].join("\n"), "life-os-tasks-filtered.md", "text/markdown");
+  };
   const markFilteredInProgress = () => {
     filteredTasks
       .filter((task) => task.status === "todo" || task.status === "blocked")
@@ -699,6 +742,12 @@ function TasksPage() {
           <option value="medium">medium</option>
           <option value="low">low</option>
         </select>
+        <select value={dueFilter} onChange={(event) => setDueFilter(event.target.value as typeof dueFilter)}>
+          <option value="all">All due dates</option>
+          <option value="overdue">Overdue</option>
+          <option value="next7">Due next 7 days</option>
+          <option value="no_due">No due date</option>
+        </select>
         <select value={sortBy} onChange={(event) => setSortBy(event.target.value as typeof sortBy)}>
           <option value="created_desc">Newest</option>
           <option value="due_asc">Due Date</option>
@@ -714,7 +763,10 @@ function TasksPage() {
         <button type="button" onClick={exportFilteredTasksCsv} disabled={filteredTasks.length === 0}>
           Export Filtered CSV
         </button>
-        <button type="button" onClick={() => { setStatusFilter("all"); setPriorityFilter("all"); setSortBy("created_desc"); setSearch(""); }}>
+        <button type="button" onClick={exportFilteredTasksMarkdown} disabled={filteredTasks.length === 0}>
+          Export Filtered Markdown
+        </button>
+        <button type="button" onClick={() => { setStatusFilter("all"); setPriorityFilter("all"); setDueFilter("all"); setSortBy("created_desc"); setSearch(""); }}>
           Reset Filters
         </button>
       </div>
@@ -734,6 +786,10 @@ function TasksPage() {
         <article className="card">
           <strong>Done Rate</strong>
           <p>{doneRate.toFixed(1)}%</p>
+        </article>
+        <article className="card">
+          <strong>High / Medium / Low</strong>
+          <p>{filteredPriorityCounts.high ?? 0} / {filteredPriorityCounts.medium ?? 0} / {filteredPriorityCounts.low ?? 0}</p>
         </article>
       </div>
       <form className="stack" onSubmit={onSubmit}>
@@ -807,10 +863,16 @@ function StoragePage() {
   const [metricLabel, setMetricLabel] = useState("");
   const [metricValue, setMetricValue] = useState("0");
   const [search, setSearch] = useState("");
+  const [metricSearch, setMetricSearch] = useState("");
   const [sortBy, setSortBy] = useState<"name_asc" | "name_desc" | "metrics_desc">("name_asc");
 
   const displayedWorkbooks = snapshot.workbooks
     .filter((workbook) => workbook.name.toLowerCase().includes(search.trim().toLowerCase()))
+    .filter((workbook) =>
+      metricSearch.trim() === ""
+        ? true
+        : workbook.metrics.some((metric) => metric.label.toLowerCase().includes(metricSearch.trim().toLowerCase())),
+    )
     .sort((a, b) => {
       if (sortBy === "name_desc") return b.name.localeCompare(a.name);
       if (sortBy === "metrics_desc") return b.metrics.length - a.metrics.length;
@@ -854,6 +916,11 @@ function StoragePage() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search workbooks"
+        />
+        <input
+          value={metricSearch}
+          onChange={(event) => setMetricSearch(event.target.value)}
+          placeholder="Filter by metric label"
         />
         <select value={sortBy} onChange={(event) => setSortBy(event.target.value as typeof sortBy)}>
           <option value="name_asc">Name (A-Z)</option>
@@ -917,6 +984,7 @@ function CoachPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [moduleFilter, setModuleFilter] = useState<"all" | "journal" | "notes" | "tasks" | "storage">("all");
   const [search, setSearch] = useState("");
+  const [notificationSearch, setNotificationSearch] = useState("");
 
   useEffect(() => {
     setNotifications(actions.generateNotifications());
@@ -972,6 +1040,14 @@ function CoachPage() {
     downloadContent(JSON.stringify(visibleInsights, null, 2), "life-os-visible-insights.json", "application/json");
     setMessage("Visible insights JSON export created.");
   };
+  const visibleNotifications = notifications.filter((notification) => {
+    if (!notificationSearch.trim()) return true;
+    const value = notificationSearch.trim().toLowerCase();
+    return (
+      notification.triggerDescription.toLowerCase().includes(value) ||
+      notification.message.toLowerCase().includes(value)
+    );
+  });
 
   return (
     <section>
@@ -992,7 +1068,9 @@ function CoachPage() {
           <option value="storage">Storage</option>
         </select>
         <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search insights" />
+        <input value={notificationSearch} onChange={(event) => setNotificationSearch(event.target.value)} placeholder="Search notifications" />
         <button onClick={exportVisibleInsightsJson}>Export Visible Insights JSON</button>
+        <article className="card">Visible notifications: {visibleNotifications.length}</article>
       </div>
       {message ? <p>{message}</p> : null}
       {review ? (
@@ -1008,7 +1086,7 @@ function CoachPage() {
       ) : null}
       <h3>Notification Center</h3>
       <ul className="stack">
-        {notifications.map((notification) => (
+        {visibleNotifications.map((notification) => (
           <li key={notification.id} className="card">
             <strong>{notification.triggerDescription}</strong>
             <p>{notification.message}</p>
@@ -1075,6 +1153,16 @@ function SyncPage() {
         <button onClick={exportFilteredQueue} disabled={visibleQueue.length === 0}>
           Export Filtered Queue JSON
         </button>
+        <button type="button" onClick={() => { setModuleFilter("all"); setSortBy("newest"); }}>
+          Reset Filters
+        </button>
+      </div>
+      <div className="cards">
+        {(["journal", "notes", "tasks", "storage"] as const).map((module) => (
+          <article key={module} className="card">
+            {module}: {visibleQueue.filter((operation) => operation.module === module).length}
+          </article>
+        ))}
       </div>
       <h3>Queue</h3>
       <ul className="stack">
@@ -1142,6 +1230,7 @@ function TimelinePage() {
   const [textFilter, setTextFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [sortDirection, setSortDirection] = useState<"newest" | "oldest">("newest");
 
   const filtered = snapshot.timeline.filter((event) => {
     const moduleMatch = moduleFilter === "all" || event.module === moduleFilter;
@@ -1179,6 +1268,11 @@ function TimelinePage() {
     .sort((a, b) => b[0].localeCompare(a[0]))
     .slice(0, 5);
   const topModules = Object.entries(moduleCounts).sort((a, b) => b[1] - a[1]);
+  const sortedFiltered = [...filtered].sort((a, b) =>
+    sortDirection === "newest"
+      ? new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      : new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  );
   const eventTypeCounts = filtered.reduce<Record<string, number>>((acc, event) => {
     acc[event.eventType] = (acc[event.eventType] ?? 0) + 1;
     return acc;
@@ -1186,7 +1280,7 @@ function TimelinePage() {
   const exportFilteredTimelineCsv = () => {
     const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
     const header = "id,module,eventType,timestamp,title";
-    const rows = filtered.map((event) =>
+    const rows = sortedFiltered.map((event) =>
       [event.id, event.module, event.eventType, event.timestamp, escape(event.title)].join(","),
     );
     downloadContent(
@@ -1196,7 +1290,7 @@ function TimelinePage() {
     );
   };
   const exportFilteredTimelineJson = () => {
-    downloadContent(JSON.stringify(filtered, null, 2), `life-os-timeline-${timelineView}.json`, "application/json");
+    downloadContent(JSON.stringify(sortedFiltered, null, 2), `life-os-timeline-${timelineView}.json`, "application/json");
   };
   const exportTimelineSummaryMarkdown = () => {
     const lines = [
@@ -1235,15 +1329,20 @@ function TimelinePage() {
           <option value="yearly">Yearly</option>
         </select>
         <input value={textFilter} onChange={(event) => setTextFilter(event.target.value)} placeholder="Filter by text" />
+        <select value={sortDirection} onChange={(event) => setSortDirection(event.target.value as typeof sortDirection)}>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </select>
         <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
         <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
-        <button type="button" onClick={() => { setModuleFilter("all"); setEventTypeFilter("all"); setTimelineView("daily"); setTextFilter(""); setStartDate(""); setEndDate(""); }}>
+        <button type="button" onClick={() => { setModuleFilter("all"); setEventTypeFilter("all"); setTimelineView("daily"); setTextFilter(""); setSortDirection("newest"); setStartDate(""); setEndDate(""); }}>
           Reset Filters
         </button>
       </div>
       <div className="cards">
         <article className="card">Filtered events: {filtered.length}</article>
         <article className="card">Distinct {timelineView} periods: {Object.keys(groupedCounts).length}</article>
+        <article className="card">Top module: {topModules[0]?.[0] ?? "n/a"} ({topModules[0]?.[1] ?? 0})</article>
         <button onClick={exportFilteredTimelineCsv}>Export Filtered Timeline CSV</button>
         <button onClick={exportFilteredTimelineJson}>Export Filtered Timeline JSON</button>
         <button onClick={exportTimelineSummaryMarkdown}>Export Timeline Summary MD</button>
@@ -1268,7 +1367,7 @@ function TimelinePage() {
         ))}
       </ul>
       <ul className="stack">
-        {filtered.map((event) => (
+        {sortedFiltered.map((event) => (
           <li key={event.id} className="card">
             {event.timestamp} — {event.title}
           </li>
@@ -1284,6 +1383,7 @@ function GraphPage() {
   const [relationshipFilter, setRelationshipFilter] = useState<"all" | "mentions" | "related_to" | "derived_from">("all");
   const [search, setSearch] = useState("");
   const [edgeSearch, setEdgeSearch] = useState("");
+  const [hideIsolated, setHideIsolated] = useState(false);
   const filteredNodes = snapshot.graphNodes.filter((node) => {
     const typeMatch = nodeTypeFilter === "all" || node.type === nodeTypeFilter;
     const textMatch = search.trim() === "" || node.label.toLowerCase().includes(search.toLowerCase());
@@ -1315,9 +1415,10 @@ function GraphPage() {
   }, {});
   const connectedNodeIds = new Set(filteredEdges.flatMap((edge) => [edge.source, edge.target]));
   const isolatedNodeCount = filteredNodes.filter((node) => !connectedNodeIds.has(node.id)).length;
+  const visibleNodes = hideIsolated ? filteredNodes.filter((node) => connectedNodeIds.has(node.id)) : filteredNodes;
   const exportFilteredGraphJson = () => {
     downloadContent(
-      JSON.stringify({ nodes: filteredNodes, edges: filteredEdges }, null, 2),
+      JSON.stringify({ nodes: visibleNodes, edges: filteredEdges }, null, 2),
       "life-os-graph-filtered.json",
       "application/json",
     );
@@ -1334,11 +1435,15 @@ function GraphPage() {
     );
     downloadContent(["id,source,relationship,target", ...rows].join("\n"), "life-os-graph-edges-filtered.csv", "text/csv");
   };
+  const exportVisibleNodeLabelsCsv = () => {
+    const rows = visibleNodes.map((node) => `${node.id},"${node.label.replaceAll('"', '""')}",${node.type}`);
+    downloadContent(["id,label,type", ...rows].join("\n"), "life-os-graph-visible-nodes.csv", "text/csv");
+  };
 
   return (
     <section>
       <h2>Life Graph</h2>
-      <p>Nodes: {filteredNodes.length} | Edges: {filteredEdges.length} | Isolated nodes: {isolatedNodeCount}</p>
+      <p>Nodes: {visibleNodes.length} | Edges: {filteredEdges.length} | Isolated nodes: {isolatedNodeCount}</p>
       <div className="cards">
         <select value={nodeTypeFilter} onChange={(event) => setNodeTypeFilter(event.target.value as typeof nodeTypeFilter)}>
           <option value="all">All node types</option>
@@ -1355,9 +1460,13 @@ function GraphPage() {
         </select>
         <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search node labels" />
         <input value={edgeSearch} onChange={(event) => setEdgeSearch(event.target.value)} placeholder="Search edges" />
+        <label>
+          <input type="checkbox" checked={hideIsolated} onChange={(event) => setHideIsolated(event.target.checked)} /> Hide isolated
+        </label>
         <button type="button" onClick={exportFilteredGraphJson}>Export Filtered Graph JSON</button>
         <button type="button" onClick={exportFilteredEdgesCsv}>Export Filtered Edges CSV</button>
-        <button type="button" onClick={() => { setNodeTypeFilter("all"); setRelationshipFilter("all"); setSearch(""); setEdgeSearch(""); }}>
+        <button type="button" onClick={exportVisibleNodeLabelsCsv}>Export Visible Nodes CSV</button>
+        <button type="button" onClick={() => { setNodeTypeFilter("all"); setRelationshipFilter("all"); setSearch(""); setEdgeSearch(""); setHideIsolated(false); }}>
           Reset Filters
         </button>
       </div>
@@ -1386,7 +1495,7 @@ function GraphPage() {
         ))}
       </ul>
       <ul className="stack">
-        {filteredNodes.map((node) => (
+        {visibleNodes.map((node) => (
           <li key={node.id} className="card">
             [{node.type}] {node.label}
           </li>
@@ -1474,6 +1583,14 @@ function ExportPage() {
           }}
         >
           Export Graph JSON
+        </button>
+        <button
+          onClick={() => {
+            downloadContent(JSON.stringify(snapshot.insights, null, 2), "life-os-insights.json", "application/json");
+            setMessage("Coach insights JSON export created.");
+          }}
+        >
+          Export Coach Insights JSON
         </button>
         {message ? <p>{message}</p> : null}
       </div>
@@ -1651,6 +1768,19 @@ function SettingsPage() {
     localStorage.removeItem("life-os-auth-email");
     window.location.reload();
   };
+  const exportStateStatsJson = () => {
+    const payload = {
+      journalEntries: snapshot.journalEntries.length,
+      notes: snapshot.notes.length,
+      tasks: snapshot.tasks.length,
+      workbooks: snapshot.workbooks.length,
+      timelineEvents: snapshot.timeline.length,
+      graphNodes: snapshot.graphNodes.length,
+      graphEdges: snapshot.graphEdges.length,
+      insights: snapshot.insights.length,
+    };
+    downloadContent(JSON.stringify(payload, null, 2), "life-os-state-stats.json", "application/json");
+  };
 
   return (
     <section>
@@ -1659,6 +1789,9 @@ function SettingsPage() {
         <p>Use dedicated routes for data tools:</p>
         <button type="button" onClick={clearLocalPreferences}>
           Clear Local Preferences
+        </button>
+        <button type="button" onClick={exportStateStatsJson}>
+          Export State Stats JSON
         </button>
         <div className="cards">
           <Link to="/export">Open Export</Link>
