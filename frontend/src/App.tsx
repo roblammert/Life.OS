@@ -123,6 +123,7 @@ function Layout() {
       <form className="search-row" onSubmit={onSearch}>
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Global search across journal, notes, tasks, storage" />
         <button type="submit">Search</button>
+        <button type="button" onClick={() => { setQuery(""); setResults([]); }}>Clear</button>
       </form>
       {results.length > 0 ? (
         <ul className="stack">
@@ -145,6 +146,7 @@ function Layout() {
         <Link to="/sync">Sync</Link>
         <Link to="/timeline">Timeline</Link>
         <Link to="/graph">Graph</Link>
+        <Link to="/help">Help</Link>
         <Link to="/auth/login">Login</Link>
         <Link to="/auth/register">Register</Link>
         <Link to="/export">Export</Link>
@@ -163,6 +165,7 @@ function Layout() {
           <Route path="/sync" element={<SyncPage />} />
           <Route path="/timeline" element={<TimelinePage />} />
           <Route path="/graph" element={<GraphPage />} />
+          <Route path="/help" element={<HelpPage />} />
           <Route path="/auth/login" element={<AuthLoginPage onLogin={setAuthEmail} />} />
           <Route path="/auth/register" element={<AuthRegisterPage onRegister={setAuthEmail} />} />
           <Route path="/auth/reset" element={<AuthResetPage />} />
@@ -255,6 +258,20 @@ function AuthResetPage() {
   );
 }
 
+function HelpPage() {
+  return (
+    <section>
+      <h2>Help</h2>
+      <ul className="stack">
+        <li className="card">Use Global Search to query Journal, Notes, Tasks, and Storage records.</li>
+        <li className="card">Use Sync page to monitor queue operations and trigger sync.</li>
+        <li className="card">Use Export/Import pages for JSON, Markdown, CSV backups and restores.</li>
+        <li className="card">Use Coach page for reviews, notifications, life moments, and insight actions.</li>
+      </ul>
+    </section>
+  );
+}
+
 function DashboardPage() {
   const { snapshot, actions } = useLifeOs();
   const [openTaskCount, setOpenTaskCount] = useState(0);
@@ -263,6 +280,14 @@ function DashboardPage() {
   const [moduleActivity, setModuleActivity] = useState<Record<string, number>>({});
   const [overdueCount, setOverdueCount] = useState(0);
   const [upcomingCount, setUpcomingCount] = useState(0);
+  const completionRate =
+    snapshot.tasks.length > 0
+      ? (snapshot.tasks.filter((task) => task.status === "done").length / snapshot.tasks.length) * 100
+      : 0;
+  const upcomingTasks = snapshot.tasks
+    .filter((task) => task.dueDate && task.status !== "done")
+    .sort((a, b) => new Date(a.dueDate ?? "").getTime() - new Date(b.dueDate ?? "").getTime())
+    .slice(0, 3);
 
   useEffect(() => {
     void (async () => {
@@ -310,6 +335,7 @@ function DashboardPage() {
         <article className="card">Open Tasks (DB query): {openTaskCount}</article>
         <article className="card">Overdue Tasks: {overdueCount}</article>
         <article className="card">Due in 3 Days: {upcomingCount}</article>
+        <article className="card">Completion Rate: {completionRate.toFixed(1)}%</article>
       </div>
       <h3>Recent Journal Entries (DB query)</h3>
       <ul className="stack">
@@ -340,6 +366,14 @@ function DashboardPage() {
         {snapshot.insights.slice(0, 3).map((insight) => (
           <li key={insight.id} className="card">
             <strong>{insight.sourceModule}</strong>: {insight.content}
+          </li>
+        ))}
+      </ul>
+      <h3>Upcoming Tasks</h3>
+      <ul className="stack">
+        {upcomingTasks.map((task) => (
+          <li key={task.id} className="card">
+            {task.title} — due {task.dueDate}
           </li>
         ))}
       </ul>
