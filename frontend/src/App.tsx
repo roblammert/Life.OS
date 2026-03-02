@@ -142,6 +142,7 @@ function Layout() {
         <Link to="/tasks">Tasks</Link>
         <Link to="/storage">Storage</Link>
         <Link to="/coach">Coach</Link>
+        <Link to="/sync">Sync</Link>
         <Link to="/timeline">Timeline</Link>
         <Link to="/graph">Graph</Link>
         <Link to="/auth/login">Login</Link>
@@ -159,6 +160,7 @@ function Layout() {
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/storage" element={<StoragePage />} />
           <Route path="/coach" element={<CoachPage />} />
+          <Route path="/sync" element={<SyncPage />} />
           <Route path="/timeline" element={<TimelinePage />} />
           <Route path="/graph" element={<GraphPage />} />
           <Route path="/auth/login" element={<AuthLoginPage onLogin={setAuthEmail} />} />
@@ -609,6 +611,31 @@ function CoachPage() {
       <ul className="stack">
         {snapshot.insights.map((insight) => (
           <InsightCard key={insight.id} insight={insight} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function SyncPage() {
+  const { snapshot, actions } = useLifeOs();
+  return (
+    <section>
+      <h2>Sync Status</h2>
+      <div className="cards">
+        <article className="card">State: {snapshot.syncStatus.state}</article>
+        <article className="card">Pending Operations: {snapshot.syncQueue.length}</article>
+        <article className="card">
+          Last Synced: {snapshot.syncStatus.lastSyncedAt ? new Date(snapshot.syncStatus.lastSyncedAt).toLocaleString() : "Never"}
+        </article>
+      </div>
+      <button onClick={actions.syncNow}>Sync Now</button>
+      <h3>Queue</h3>
+      <ul className="stack">
+        {snapshot.syncQueue.map((operation) => (
+          <li key={operation.id} className="card">
+            [{operation.module}] {operation.operation} {operation.entityId} at {operation.createdAt}
+          </li>
         ))}
       </ul>
     </section>
