@@ -405,6 +405,14 @@ function NotesPage() {
     return note.tags.some((tag) => tag.includes(tagFilter.trim().toLowerCase()));
   });
 
+  const createTaskFromNote = (noteTitle: string, noteContent: string) => {
+    actions.createTask({
+      title: `Follow up: ${noteTitle}`,
+      description: noteContent.slice(0, 220),
+      priority: "medium",
+    });
+  };
+
   return (
     <section>
       <h2>Life.Notes</h2>
@@ -429,6 +437,9 @@ function NotesPage() {
             <strong>{note.title}</strong>
             <p>{note.contentMarkdown}</p>
             {note.tags.length > 0 ? <p>Tags: {note.tags.join(", ")}</p> : null}
+            <button onClick={() => createTaskFromNote(note.title, note.contentMarkdown)}>
+              Create Task from Note
+            </button>
           </li>
         ))}
       </ul>
