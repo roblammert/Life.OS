@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { LifeOsEngine, type PersistedLifeOsState } from "../core/engines/life-os-engine";
-import type { NotificationItem, ReviewSummary, TaskPriority } from "../core/types";
+import type { NotificationItem, ReviewSummary, TaskPriority, TaskStatus } from "../core/types";
 import { type GlobalSearchResult, IndexedDbGateway } from "../lib/db/indexeddb";
 
 interface LifeOsContextValue {
@@ -10,6 +10,7 @@ interface LifeOsContextValue {
     createNote: (input: { title: string; contentMarkdown: string }) => void;
     createTask: (input: { title: string; description: string; priority: TaskPriority }) => void;
     completeTask: (taskId: string) => void;
+    updateTaskStatus: (taskId: string, status: TaskStatus) => void;
     createWorkbook: (input: { name: string; metricLabel: string; metricValue: number }) => void;
     syncNow: () => void;
     exportData: () => string;
@@ -69,6 +70,11 @@ export function LifeOsProvider({ children }: { children: ReactNode }) {
         },
         completeTask: (taskId) => {
           engineRef.current.completeTask(taskId);
+          refresh();
+          persist();
+        },
+        updateTaskStatus: (taskId, status) => {
+          engineRef.current.updateTaskStatus(taskId, status);
           refresh();
           persist();
         },

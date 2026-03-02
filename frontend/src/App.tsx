@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { LifeOsProvider, useLifeOs } from "./app/life-os-provider";
-import type { TaskPriority } from "./core/types";
+import type { TaskPriority, TaskStatus } from "./core/types";
 import type { GlobalSearchResult } from "./lib/db/indexeddb";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -337,7 +337,15 @@ function TasksPage() {
             <li key={task.id} className="card">
               <strong>{task.title}</strong> — {task.status} ({task.priority})
               <p>{task.description}</p>
-              {task.status !== "done" ? <button onClick={() => actions.completeTask(task.id)}>Mark Done</button> : null}
+              <select
+                value={task.status}
+                onChange={(event) => actions.updateTaskStatus(task.id, event.target.value as TaskStatus)}
+              >
+                <option value="todo">todo</option>
+                <option value="in_progress">in_progress</option>
+                <option value="blocked">blocked</option>
+                <option value="done">done</option>
+              </select>
             </li>
           ))}
         </ul>
@@ -353,7 +361,15 @@ function TasksPage() {
                     <li key={task.id} className="card">
                       <strong>{task.title}</strong> ({task.priority})
                       <p>{task.description}</p>
-                      {task.status !== "done" ? <button onClick={() => actions.completeTask(task.id)}>Mark Done</button> : null}
+                      <select
+                        value={task.status}
+                        onChange={(event) => actions.updateTaskStatus(task.id, event.target.value as TaskStatus)}
+                      >
+                        <option value="todo">todo</option>
+                        <option value="in_progress">in_progress</option>
+                        <option value="blocked">blocked</option>
+                        <option value="done">done</option>
+                      </select>
                     </li>
                   ))}
               </ul>

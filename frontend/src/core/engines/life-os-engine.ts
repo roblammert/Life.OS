@@ -157,16 +157,20 @@ export class LifeOsEngine {
   }
 
   completeTask(taskId: string): void {
+    this.updateTaskStatus(taskId, "done");
+  }
+
+  updateTaskStatus(taskId: string, status: TaskStatus): void {
     const task = this.tasks.find((item) => item.id === taskId);
     if (!task) return;
-    task.status = "done";
+    task.status = status;
     task.updatedAt = nowIso();
     this.timeline.unshift({
       id: createId("event"),
       module: "tasks",
       referenceId: task.id,
-      title: `Completed: ${task.title}`,
-      eventType: "completed",
+      title: status === "done" ? `Completed: ${task.title}` : `Updated: ${task.title} (${status})`,
+      eventType: status === "done" ? "completed" : "updated",
       timestamp: nowIso(),
     });
     this.coach.createTaskInsight(task.id, {
