@@ -122,12 +122,27 @@ function DashboardPage() {
   const { snapshot, actions } = useLifeOs();
   const [openTaskCount, setOpenTaskCount] = useState(0);
   const [recentTitles, setRecentTitles] = useState<string[]>([]);
+  const [taskStatusCounts, setTaskStatusCounts] = useState<Record<string, number>>({});
+  const [moduleActivity, setModuleActivity] = useState<Record<string, number>>({});
 
   useEffect(() => {
     void (async () => {
       setOpenTaskCount(await actions.listOpenTasks());
       setRecentTitles(await actions.listRecentJournalTitles());
     })();
+    const statuses = snapshot.tasks.reduce<Record<string, number>>((acc, task) => {
+      acc[task.status] = (acc[task.status] ?? 0) + 1;
+      return acc;
+    }, {});
+    setTaskStatusCounts(statuses);
+
+    const lastWeek = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const activity = snapshot.timeline.reduce<Record<string, number>>((acc, event) => {
+      if (new Date(event.timestamp).getTime() < lastWeek) return acc;
+      acc[event.module] = (acc[event.module] ?? 0) + 1;
+      return acc;
+    }, {});
+    setModuleActivity(activity);
   }, [actions, snapshot]);
 
   return (
@@ -145,6 +160,30 @@ function DashboardPage() {
         {recentTitles.map((title) => (
           <li key={title} className="card">
             {title}
+          </li>
+        ))}
+      </ul>
+      <h3>Task Status Breakdown</h3>
+      <ul className="stack">
+        {Object.entries(taskStatusCounts).map(([status, count]) => (
+          <li key={status} className="card">
+            {status}: {count}
+          </li>
+        ))}
+      </ul>
+      <h3>7-Day Module Activity</h3>
+      <ul className="stack">
+        {Object.entries(moduleActivity).map(([module, count]) => (
+          <li key={module} className="card">
+            {module}: {count} events
+          </li>
+        ))}
+      </ul>
+      <h3>Coach Digest</h3>
+      <ul className="stack">
+        {snapshot.insights.slice(0, 3).map((insight) => (
+          <li key={insight.id} className="card">
+            <strong>{insight.sourceModule}</strong>: {insight.content}
           </li>
         ))}
       </ul>
