@@ -279,18 +279,21 @@ function Layout() {
 }
 
 function AuthLoginPage({ onLogin }: { onLogin: (email: string) => void }) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => localStorage.getItem("life-os-remembered-email") ?? "");
   const [password, setPassword] = useState("");
   const [done, setDone] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberEmail, setRememberEmail] = useState(() => localStorage.getItem("life-os-remember-email") === "true");
   const emailDomain = email.includes("@") ? email.split("@")[1] : "";
+  const loginPayload = { email: email.trim().toLowerCase(), rememberEmail };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (!email.trim() || !password.trim()) return;
     localStorage.setItem("life-os-remember-email", String(rememberEmail));
-    onLogin(email.trim());
+    if (rememberEmail) localStorage.setItem("life-os-remembered-email", email.trim().toLowerCase());
+    else localStorage.removeItem("life-os-remembered-email");
+    onLogin(email.trim().toLowerCase());
     setDone(true);
   };
 
@@ -317,7 +320,11 @@ function AuthLoginPage({ onLogin }: { onLogin: (email: string) => void }) {
         <button type="button" onClick={() => void navigator.clipboard?.writeText(email)} disabled={!email.trim()}>
           Copy Email
         </button>
+        <button type="button" onClick={() => downloadContent(JSON.stringify(loginPayload, null, 2), "life-os-login-payload.json", "application/json")} disabled={!email.trim()}>
+          Export Login Payload
+        </button>
         <article className="card">Email domain: {emailDomain || "n/a"}</article>
+        <article className="card">Password length: {password.length}</article>
       </div>
       {done ? <p>Logged in locally.</p> : null}
     </section>
@@ -329,15 +336,18 @@ function AuthRegisterPage({ onRegister }: { onRegister: (email: string) => void 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [acceptUpdates, setAcceptUpdates] = useState(false);
+  const [showPasswords, setShowPasswords] = useState(false);
   const [done, setDone] = useState(false);
   const passwordStrongEnough = password.length >= 8;
   const passwordsMatch = password === confirmPassword;
+  const emailLocalPart = email.includes("@") ? email.split("@")[0] : email;
+  const registerPayload = { email: email.trim().toLowerCase(), acceptUpdates };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (!email.trim() || !password.trim() || !passwordStrongEnough || !passwordsMatch) return;
     localStorage.setItem("life-os-marketing-opt-in", String(acceptUpdates));
-    onRegister(email.trim());
+    onRegister(email.trim().toLowerCase());
     setDone(true);
   };
 
@@ -346,8 +356,11 @@ function AuthRegisterPage({ onRegister }: { onRegister: (email: string) => void 
       <h2>Register</h2>
       <form className="stack" onSubmit={onSubmit}>
         <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" />
-        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" />
-        <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Confirm password" />
+        <input type={showPasswords ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" />
+        <input type={showPasswords ? "text" : "password"} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Confirm password" />
+        <label>
+          <input type="checkbox" checked={showPasswords} onChange={(event) => setShowPasswords(event.target.checked)} /> Show passwords
+        </label>
         <label>
           <input type="checkbox" checked={acceptUpdates} onChange={(event) => setAcceptUpdates(event.target.checked)} /> Receive product updates
         </label>
@@ -360,6 +373,13 @@ function AuthRegisterPage({ onRegister }: { onRegister: (email: string) => void 
         <button type="button" onClick={() => void navigator.clipboard?.writeText(email)} disabled={!email.trim()}>
           Copy Email
         </button>
+        <button type="button" onClick={() => downloadContent(JSON.stringify(registerPayload, null, 2), "life-os-register-payload.json", "application/json")} disabled={!email.trim()}>
+          Export Register Payload
+        </button>
+        <button type="button" onClick={() => { setEmail(""); setPassword(""); setConfirmPassword(""); setAcceptUpdates(false); setDone(false); }}>
+          Clear Form
+        </button>
+        <article className="card">Email local-part: {emailLocalPart || "n/a"}</article>
       </div>
       {done ? <p>Account created locally and signed in.</p> : null}
     </section>
@@ -401,6 +421,13 @@ function AuthResetPage() {
         <button type="button" onClick={() => void navigator.clipboard?.writeText(JSON.stringify(resetPayload))} disabled={!email.trim()}>
           Copy Reset Payload
         </button>
+        <button type="button" onClick={() => setEmail(localStorage.getItem("life-os-auth-email") ?? "")}>
+          Use Current Auth Email
+        </button>
+        <button type="button" onClick={() => { setEmail(""); setReason("forgot"); setIncludeRecentActivity(false); setDone(false); }}>
+          Clear Form
+        </button>
+        <article className="card">Reset reason: {reason}</article>
       </div>
       {done ? <p>Reset instruction queued locally.</p> : null}
     </section>
@@ -421,6 +448,7 @@ function HelpPage() {
     const textMatch = !search.trim() || item.text.toLowerCase().includes(search.trim().toLowerCase());
     return categoryMatch && textMatch;
   });
+  const visibleCategories = Array.from(new Set(visibleItems.map((item) => item.category)));
   return (
     <section>
       <h2>Help</h2>
@@ -439,7 +467,14 @@ function HelpPage() {
         <button type="button" onClick={() => void navigator.clipboard?.writeText(visibleItems.map((item) => item.text).join("\n"))} disabled={visibleItems.length === 0}>
           Copy Visible Help
         </button>
+        <button type="button" onClick={() => downloadContent(JSON.stringify(visibleItems, null, 2), "life-os-help-visible.json", "application/json")} disabled={visibleItems.length === 0}>
+          Export Visible Help JSON
+        </button>
+        <button type="button" onClick={() => { setSearch(""); setCategory("all"); }}>
+          Reset Help Filters
+        </button>
         <article className="card">Visible help items: {visibleItems.length}</article>
+        <article className="card">Visible categories: {visibleCategories.join(", ") || "none"}</article>
       </div>
       <ul className="stack">
         {visibleItems.map((item) => (
@@ -2694,6 +2729,12 @@ function ExportPage() {
         >
           Copy Export Summary
         </button>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(actions.exportData())}>
+          Copy Full JSON Export
+        </button>
+        <button type="button" onClick={() => setMessage(null)}>
+          Clear Message
+        </button>
         <article className="card">Total exportable records: {Object.values(exportSummary).reduce((acc, value) => acc + value, 0)}</article>
         {message ? <p>{message}</p> : null}
       </div>
@@ -2707,6 +2748,7 @@ function ImportPage() {
   const [csvText, setCsvText] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [trimImportPayload, setTrimImportPayload] = useState(true);
+  const [dryRunCsv, setDryRunCsv] = useState(false);
   const csvPreviewRows = csvText
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -2775,6 +2817,10 @@ function ImportPage() {
     }
 
     let imported = 0;
+    if (dryRunCsv) {
+      setMessage(`Dry run parsed ${lines.length - 1} task row(s).`);
+      return;
+    }
     for (const line of lines.slice(1)) {
       const values = parseCsvLine(line);
       const title = values[titleIndex]?.trim();
@@ -2859,6 +2905,9 @@ function ImportPage() {
           >
             Load Sample CSV
           </button>
+          <label>
+            <input type="checkbox" checked={dryRunCsv} onChange={(event) => setDryRunCsv(event.target.checked)} /> Dry run CSV import
+          </label>
           <button type="button" onClick={() => setCsvText("")}>Clear CSV Input</button>
           <button type="submit">Import Tasks CSV</button>
         </form>
@@ -2882,6 +2931,7 @@ function SettingsPage() {
   const [noteSearchMinLength, setNoteSearchMinLength] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [showStateDetails, setShowStateDetails] = useState(false);
+  const [refreshIntervalSeconds, setRefreshIntervalSeconds] = useState(15);
 
   const runNoteSearch = async (event: FormEvent) => {
     event.preventDefault();
@@ -2943,6 +2993,9 @@ function SettingsPage() {
   const exportSearchResultsTxt = () => {
     downloadContent(filteredNoteSearchResults.join("\n"), "life-os-note-search-results.txt", "text/plain");
   };
+  const exportRecentJournalTitlesTxt = () => {
+    downloadContent(recentJournalTitles.join("\n"), "life-os-recent-journal-titles.txt", "text/plain");
+  };
   const totalStateRecords =
     snapshot.journalEntries.length +
     snapshot.notes.length +
@@ -2960,9 +3013,9 @@ function SettingsPage() {
     const interval = window.setInterval(() => {
       void refreshOpenTaskCount();
       void refreshRecentJournalTitles();
-    }, 15000);
+    }, Math.max(5, refreshIntervalSeconds) * 1000);
     return () => window.clearInterval(interval);
-  }, [autoRefresh]);
+  }, [autoRefresh, refreshIntervalSeconds]);
 
   return (
     <section>
@@ -2996,11 +3049,24 @@ function SettingsPage() {
         <button type="button" onClick={() => { setAutoRefresh((current) => !current); }}>
           {autoRefresh ? "Stop Auto Refresh" : "Start Auto Refresh"}
         </button>
+        <input
+          type="number"
+          min={5}
+          value={refreshIntervalSeconds}
+          onChange={(event) => setRefreshIntervalSeconds(Math.max(5, Number(event.target.value) || 5))}
+          placeholder="Auto-refresh sec"
+        />
         <button type="button" onClick={() => setShowStateDetails((current) => !current)}>
           {showStateDetails ? "Hide State Details" : "Show State Details"}
         </button>
         <button type="button" onClick={() => { void refreshOpenTaskCount(); void refreshRecentJournalTitles(); }}>
           Refresh All Widgets
+        </button>
+        <button type="button" onClick={exportRecentJournalTitlesTxt} disabled={recentJournalTitles.length === 0}>
+          Export Recent Titles TXT
+        </button>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(recentJournalTitles.join("\n"))} disabled={recentJournalTitles.length === 0}>
+          Copy Recent Titles
         </button>
         <div className="cards">
           <Link to="/export">Open Export</Link>
