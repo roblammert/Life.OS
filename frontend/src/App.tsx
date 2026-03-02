@@ -297,6 +297,7 @@ function TasksPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
+  const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -314,6 +315,12 @@ function TasksPage() {
   return (
     <section>
       <h2>Life.Assistant</h2>
+      <div className="cards">
+        <select value={viewMode} onChange={(event) => setViewMode(event.target.value as typeof viewMode)}>
+          <option value="list">List View</option>
+          <option value="kanban">Kanban View</option>
+        </select>
+      </div>
       <form className="stack" onSubmit={onSubmit}>
         <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Task title" />
         <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} placeholder="Task details" />
@@ -324,15 +331,36 @@ function TasksPage() {
         </select>
         <button type="submit">Create Task</button>
       </form>
-      <ul className="stack">
-        {snapshot.tasks.map((task) => (
-          <li key={task.id} className="card">
-            <strong>{task.title}</strong> — {task.status} ({task.priority})
-            <p>{task.description}</p>
-            {task.status !== "done" ? <button onClick={() => actions.completeTask(task.id)}>Mark Done</button> : null}
-          </li>
-        ))}
-      </ul>
+      {viewMode === "list" ? (
+        <ul className="stack">
+          {snapshot.tasks.map((task) => (
+            <li key={task.id} className="card">
+              <strong>{task.title}</strong> — {task.status} ({task.priority})
+              <p>{task.description}</p>
+              {task.status !== "done" ? <button onClick={() => actions.completeTask(task.id)}>Mark Done</button> : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="kanban">
+          {(["todo", "in_progress", "blocked", "done"] as const).map((status) => (
+            <section key={status} className="card">
+              <h3>{status.replace("_", " ")}</h3>
+              <ul className="stack">
+                {snapshot.tasks
+                  .filter((task) => task.status === status)
+                  .map((task) => (
+                    <li key={task.id} className="card">
+                      <strong>{task.title}</strong> ({task.priority})
+                      <p>{task.description}</p>
+                      {task.status !== "done" ? <button onClick={() => actions.completeTask(task.id)}>Mark Done</button> : null}
+                    </li>
+                  ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

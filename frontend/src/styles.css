@@ -110,6 +110,12 @@ body {
   gap: 0.5rem;
 }
 
+.kanban {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
 input,
 textarea,
 select,
