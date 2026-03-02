@@ -356,6 +356,12 @@ function DashboardPage() {
       ? snapshot.tasks.reduce((acc, task) => acc + (Date.now() - new Date(task.createdAt).getTime()) / 86400000, 0) /
         snapshot.tasks.length
       : 0;
+  const completedLast7Days = snapshot.tasks.filter(
+    (task) => task.status === "done" && new Date(task.updatedAt).getTime() >= Date.now() - 7 * 24 * 60 * 60 * 1000,
+  ).length;
+  const timelineLast24Hours = snapshot.timeline.filter(
+    (event) => new Date(event.timestamp).getTime() >= Date.now() - 24 * 60 * 60 * 1000,
+  ).length;
   const exportModuleActivityCsv = () => {
     const rows = Object.entries(moduleActivity).map(([module, count]) => `${module},${count}`);
     downloadContent(["module,count", ...rows].join("\n"), "life-os-module-activity.csv", "text/csv");
@@ -384,6 +390,22 @@ function DashboardPage() {
   const exportCompletedTasksCsv = () => {
     const rows = recentCompletedTasks.map((task) => `${task.id},"${task.title.replaceAll('"', '""')}",${task.updatedAt}`);
     downloadContent(["id,title,updatedAt", ...rows].join("\n"), "life-os-completed-tasks.csv", "text/csv");
+  };
+  const exportOverdueTasksCsv = () => {
+    const rows = overdueTasks.map((task) => `${task.id},"${task.title.replaceAll('"', '""')}",${task.dueDate ?? ""}`);
+    downloadContent(["id,title,dueDate", ...rows].join("\n"), "life-os-overdue-tasks.csv", "text/csv");
+  };
+  const exportDashboardSummaryMarkdown = () => {
+    const lines = [
+      "# Life.OS Dashboard Summary",
+      "",
+      `Tasks: ${snapshot.tasks.length}`,
+      `Open tasks: ${openTaskCount}`,
+      `Completion rate: ${completionRate.toFixed(1)}%`,
+      `Completed last 7d: ${completedLast7Days}`,
+      `Timeline events last 24h: ${timelineLast24Hours}`,
+    ];
+    downloadContent(lines.join("\n"), "life-os-dashboard-summary.md", "text/markdown");
   };
 
   useEffect(() => {
@@ -440,12 +462,18 @@ function DashboardPage() {
           Top pending sync module: {pendingSyncByModule ? `${pendingSyncByModule[0]} (${pendingSyncByModule[1]})` : "n/a"}
         </article>
         <article className="card">Avg task age: {averageTaskAgeDays.toFixed(1)} days</article>
+        <article className="card">Completed in 7d: {completedLast7Days}</article>
+        <article className="card">Timeline events in 24h: {timelineLast24Hours}</article>
         <button type="button" onClick={exportSnapshotSummaryJson}>Export Snapshot Summary JSON</button>
+        <button type="button" onClick={exportDashboardSummaryMarkdown}>Export Summary MD</button>
         <button type="button" onClick={exportUpcomingTasksCsv} disabled={upcomingTasks.length === 0}>
           Export Upcoming Tasks CSV
         </button>
         <button type="button" onClick={exportCompletedTasksCsv} disabled={recentCompletedTasks.length === 0}>
           Export Completed Tasks CSV
+        </button>
+        <button type="button" onClick={exportOverdueTasksCsv} disabled={overdueTasks.length === 0}>
+          Export Overdue Tasks CSV
         </button>
       </div>
       <h3>Recent Journal Entries (DB query)</h3>
@@ -520,6 +548,7 @@ function JournalPage() {
   const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
   const [moodTagInput, setMoodTagInput] = useState("");
   const [titleTemplate, setTitleTemplate] = useState("Daily Reflection");
+  const [onlyMoodTagged, setOnlyMoodTagged] = useState(false);
   const journalTemplates = [
     "What went well today?",
     "What challenged me today?",
@@ -547,6 +576,9 @@ function JournalPage() {
       "application/json",
     );
   };
+  const exportVisibleEntriesJson = () => {
+    downloadContent(JSON.stringify(displayedEntries, null, 2), "life-os-journal-visible.json", "application/json");
+  };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -563,6 +595,7 @@ function JournalPage() {
         entry.title.toLowerCase().includes(search.toLowerCase()) ||
         entry.contentMarkdown.toLowerCase().includes(search.toLowerCase());
       if (!textMatch) return false;
+      if (onlyMoodTagged && !entry.contentMarkdown.includes("#")) return false;
       if (sentimentFilter === "all") return true;
       if (sentimentFilter === "positive") return entry.sentimentScore > 0.15;
       if (sentimentFilter === "negative") return entry.sentimentScore < -0.15;
@@ -650,6 +683,12 @@ function JournalPage() {
         <button type="button" onClick={exportSentimentSummaryJson} disabled={displayedEntries.length === 0}>
           Export Sentiment Summary JSON
         </button>
+        <button type="button" onClick={exportVisibleEntriesJson} disabled={displayedEntries.length === 0}>
+          Export Visible JSON
+        </button>
+        <button type="button" onClick={() => setOnlyMoodTagged((current) => !current)}>
+          {onlyMoodTagged ? "Show All Entries" : "Only Mood-Tagged"}
+        </button>
         <button type="button" onClick={() => { setSearch(""); setSentimentFilter("all"); }}>
           Reset Filters
         </button>
@@ -674,6 +713,9 @@ function JournalPage() {
               Sentiment: {entry.sentimentScore.toFixed(2)}{" "}
               ({entry.sentimentScore > 0.15 ? "positive" : entry.sentimentScore < -0.15 ? "negative" : "neutral"})
             </p>
+            <button type="button" onClick={() => { setTitle(`${entry.title} (copy)`); setContent(entry.contentMarkdown); }}>
+              Load Into Draft
+            </button>
           </li>
         ))}
       </ul>
@@ -740,6 +782,10 @@ function NotesPage() {
   const exportTagCountsJson = () => {
     downloadContent(JSON.stringify(Object.fromEntries(topTags), null, 2), "life-os-notes-tag-counts.json", "application/json");
   };
+  const exportTopTagsTxt = () => {
+    downloadContent(topTags.map(([tag, count]) => `${tag}: ${count}`).join("\n"), "life-os-notes-top-tags.txt", "text/plain");
+  };
+  const checklistCount = displayedNotes.filter((note) => note.contentMarkdown.includes("- [")).length;
 
   const createTaskFromNote = (noteTitle: string, noteContent: string) => {
     actions.createTask({
@@ -784,6 +830,12 @@ function NotesPage() {
         <button type="button" onClick={exportTagCountsJson} disabled={topTags.length === 0}>
           Export Tag Counts JSON
         </button>
+        <button type="button" onClick={exportTopTagsTxt} disabled={topTags.length === 0}>
+          Export Top Tags TXT
+        </button>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(displayedNotes.map((note) => note.title).join("\n"))} disabled={displayedNotes.length === 0}>
+          Copy Visible Titles
+        </button>
         <button type="button" onClick={() => setPreviewMode((current) => !current)}>
           {previewMode ? "Hide Preview" : "Show Preview"}
         </button>
@@ -794,6 +846,7 @@ function NotesPage() {
         <article className="card">Visible notes: {displayedNotes.length}</article>
         <article className="card">Unique tags: {uniqueTagCount}</article>
         <article className="card">Visible words: {visibleWords}</article>
+        <article className="card">Checklist notes: {checklistCount}</article>
       </div>
       <ul className="stack">
         {displayedNotes.map((note) => (
@@ -938,11 +991,13 @@ function TasksPage() {
     downloadContent(["# Filtered Tasks", ...lines].join("\n"), "life-os-tasks-filtered.md", "text/markdown");
   };
   const exportTasksByStatusJson = () => {
+    const statusCounts = filteredTasks.reduce<Record<string, number>>((acc, task) => {
+      acc[task.status] = (acc[task.status] ?? 0) + 1;
+      return acc;
+    }, {});
     const payload = {
-      todo: filteredTasks.filter((task) => task.status === "todo"),
-      in_progress: filteredTasks.filter((task) => task.status === "in_progress"),
-      blocked: filteredTasks.filter((task) => task.status === "blocked"),
-      done: filteredTasks.filter((task) => task.status === "done"),
+      counts: statusCounts,
+      tasks: filteredTasks,
     };
     downloadContent(JSON.stringify(payload, null, 2), "life-os-tasks-by-status.json", "application/json");
   };
@@ -950,7 +1005,11 @@ function TasksPage() {
     downloadContent(filteredTasks.map((task) => task.title).join("\n"), "life-os-tasks-titles.txt", "text/plain");
   };
   const exportStatusSnapshotJson = () => {
-    downloadContent(JSON.stringify({ counts: filteredPriorityCounts, total: filteredTasks.length }, null, 2), "life-os-tasks-status-snapshot.json", "application/json");
+    const statusCounts = filteredTasks.reduce<Record<string, number>>((acc, task) => {
+      acc[task.status] = (acc[task.status] ?? 0) + 1;
+      return acc;
+    }, {});
+    downloadContent(JSON.stringify({ counts: statusCounts, total: filteredTasks.length }, null, 2), "life-os-tasks-status-snapshot.json", "application/json");
   };
   const markFilteredInProgress = () => {
     filteredTasks
@@ -1011,6 +1070,9 @@ function TasksPage() {
         </button>
         <button type="button" onClick={exportVisibleTitlesTxt} disabled={filteredTasks.length === 0}>
           Export Titles TXT
+        </button>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(filteredTasks.map((task) => task.id).join("\n"))} disabled={filteredTasks.length === 0}>
+          Copy Task IDs
         </button>
         <button type="button" onClick={exportStatusSnapshotJson} disabled={filteredTasks.length === 0}>
           Export Status Snapshot JSON
@@ -1123,9 +1185,8 @@ function TasksPage() {
               <h3>{status.replace("_", " ")}</h3>
               <ul className="stack">
                 {snapshot.tasks
-                  .filter((task) => (statusFilter === "all" ? true : task.status === statusFilter))
-                  .filter((task) => (priorityFilter === "all" ? true : task.priority === priorityFilter))
                   .filter((task) => task.status === status)
+                  .filter((task) => filteredTasks.some((filtered) => filtered.id === task.id))
                   .map((task) => (
                     <li key={task.id} className="card">
                       <strong>{task.title}</strong> ({task.priority})
@@ -1202,6 +1263,9 @@ function StoragePage() {
     downloadContent(["workbookId,workbookName,metricLabel,metricValue", ...rows].join("\n"), "life-os-storage-metrics.csv", "text/csv");
   };
   const averageMetricsPerWorkbook = displayedWorkbooks.length > 0 ? totalMetrics / displayedWorkbooks.length : 0;
+  const metricValues = displayedWorkbooks.flatMap((workbook) => workbook.metrics.map((metric) => metric.value));
+  const metricMin = metricValues.length > 0 ? Math.min(...metricValues) : 0;
+  const metricMax = metricValues.length > 0 ? Math.max(...metricValues) : 0;
   const exportVisibleWorkbookNamesTxt = () => {
     downloadContent(displayedWorkbooks.map((workbook) => workbook.name).join("\n"), "life-os-workbook-names.txt", "text/plain");
   };
@@ -1263,6 +1327,7 @@ function StoragePage() {
           {topWorkbookMetricTotal ? `${topWorkbookMetricTotal.name} (${topWorkbookMetricTotal.total})` : "n/a"}
         </article>
         <article className="card">Avg metrics/workbook: {averageMetricsPerWorkbook.toFixed(2)}</article>
+        <article className="card">Metric min/max: {metricMin.toFixed(2)} / {metricMax.toFixed(2)}</article>
         <button type="button" onClick={exportVisibleWorkbooksJson} disabled={displayedWorkbooks.length === 0}>
           Export Visible Workbooks JSON
         </button>
@@ -1427,6 +1492,11 @@ function CoachPage() {
     downloadContent(JSON.stringify(visibleLifeMoments, null, 2), "life-os-life-moments-visible.json", "application/json");
     setMessage("Visible life moments JSON export created.");
   };
+  const averageInsightAgeDays =
+    visibleInsights.length > 0
+      ? visibleInsights.reduce((acc, insight) => acc + (Date.now() - new Date(insight.createdAt).getTime()) / 86400000, 0) /
+        visibleInsights.length
+      : 0;
 
   return (
     <section>
@@ -1463,6 +1533,7 @@ function CoachPage() {
         <article className="card">Visible insights: {visibleInsights.length}</article>
         <article className="card">Visible notifications: {visibleNotifications.length}</article>
         <article className="card">Visible life moments: {visibleLifeMoments.length}</article>
+        <article className="card">Avg insight age: {averageInsightAgeDays.toFixed(1)} days</article>
       </div>
       {message ? <p>{message}</p> : null}
       {review ? (
@@ -1553,6 +1624,9 @@ function SyncPage() {
     visibleQueue.length > 0
       ? visibleQueue.reduce((acc, operation) => acc + (Date.now() - new Date(operation.createdAt).getTime()) / 3600000, 0)
       : 0;
+  const staleOver24Hours = visibleQueue.filter(
+    (operation) => Date.now() - new Date(operation.createdAt).getTime() > 24 * 60 * 60 * 1000,
+  ).length;
   return (
     <section>
       <h2>Sync Status</h2>
@@ -1599,6 +1673,7 @@ function SyncPage() {
         <article className="card">Newest visible item age: {newestQueueAgeMinutes}m</article>
         <article className="card">Oldest visible item age: {(oldestQueueAgeMinutes / 60).toFixed(1)}h</article>
         <article className="card">Total queue age: {totalQueueAgeHours.toFixed(1)}h</article>
+        <article className="card">Stale >24h: {staleOver24Hours}</article>
       </div>
       <h3>Queue</h3>
       <ul className="stack">
@@ -1761,6 +1836,7 @@ function TimelinePage() {
     updated: filtered.length > 0 ? (eventTypeCounts.updated ?? 0) / filtered.length * 100 : 0,
     completed: filtered.length > 0 ? (eventTypeCounts.completed ?? 0) / filtered.length * 100 : 0,
   };
+  const weeklyBuckets = Object.entries(groupedCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
   return (
     <section>
@@ -1811,6 +1887,13 @@ function TimelinePage() {
         <button onClick={exportModuleCountsJson}>Export Module Counts JSON</button>
         <button onClick={exportVisibleTitlesTxt}>Export Visible Titles TXT</button>
         <button onClick={exportTopBucketsTxt} disabled={topBuckets.length === 0}>Export Top Buckets TXT</button>
+        <button
+          type="button"
+          onClick={() => void navigator.clipboard?.writeText(weeklyBuckets.map(([bucket, count]) => `${bucket}:${count}`).join("\n"))}
+          disabled={weeklyBuckets.length === 0}
+        >
+          Copy Top Buckets
+        </button>
         <button type="button" onClick={() => void navigator.clipboard?.writeText(sortedFiltered[0]?.title ?? "")} disabled={sortedFiltered.length === 0}>
           Copy First Title
         </button>
@@ -1940,6 +2023,8 @@ function GraphPage() {
   const exportVisibleNodesJson = () => {
     downloadContent(JSON.stringify(visibleNodes, null, 2), "life-os-graph-visible-nodes.json", "application/json");
   };
+  const edgeDensity =
+    visibleNodes.length > 1 ? visibleEdges.length / (visibleNodes.length * (visibleNodes.length - 1)) : 0;
 
   return (
     <section>
@@ -1951,6 +2036,7 @@ function GraphPage() {
       <article className="card">
         Top node type ratio: {primaryNodeType ? `${primaryNodeType[0]} ${(primaryNodeType[1] / nodeTypeTotal * 100).toFixed(1)}%` : "n/a"}
       </article>
+      <article className="card">Edge density: {edgeDensity.toFixed(3)}</article>
       <div className="cards">
         <select value={nodeTypeFilter} onChange={(event) => setNodeTypeFilter(event.target.value as typeof nodeTypeFilter)}>
           <option value="all">All node types</option>
