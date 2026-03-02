@@ -863,6 +863,7 @@ function TimelinePage() {
 function GraphPage() {
   const { snapshot } = useLifeOs();
   const [nodeTypeFilter, setNodeTypeFilter] = useState<"all" | "entry" | "note" | "task" | "metric">("all");
+  const [relationshipFilter, setRelationshipFilter] = useState<"all" | "mentions" | "related_to" | "derived_from">("all");
   const [search, setSearch] = useState("");
   const filteredNodes = snapshot.graphNodes.filter((node) => {
     const typeMatch = nodeTypeFilter === "all" || node.type === nodeTypeFilter;
@@ -875,7 +876,9 @@ function GraphPage() {
   }, {});
   const visibleNodeIds = new Set(filteredNodes.map((node) => node.id));
   const filteredEdges = snapshot.graphEdges.filter(
-    (edge) => visibleNodeIds.has(edge.source) || visibleNodeIds.has(edge.target),
+    (edge) =>
+      (visibleNodeIds.has(edge.source) || visibleNodeIds.has(edge.target)) &&
+      (relationshipFilter === "all" || edge.relationship === relationshipFilter),
   );
   const edgeClusters = filteredEdges.reduce<Record<string, number>>((acc, edge) => {
     acc[edge.relationship] = (acc[edge.relationship] ?? 0) + 1;
@@ -894,6 +897,12 @@ function GraphPage() {
           <option value="task">Task</option>
           <option value="metric">Metric</option>
         </select>
+        <select value={relationshipFilter} onChange={(event) => setRelationshipFilter(event.target.value as typeof relationshipFilter)}>
+          <option value="all">All relationships</option>
+          <option value="mentions">mentions</option>
+          <option value="related_to">related_to</option>
+          <option value="derived_from">derived_from</option>
+        </select>
         <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search node labels" />
       </div>
       <h3>Node Clusters</h3>
@@ -909,6 +918,14 @@ function GraphPage() {
         {Object.entries(edgeClusters).map(([relationship, count]) => (
           <li key={relationship} className="card">
             {relationship}: {count}
+          </li>
+        ))}
+      </ul>
+      <h3>Edges</h3>
+      <ul className="stack">
+        {filteredEdges.map((edge) => (
+          <li key={edge.id} className="card">
+            {edge.source} --{edge.relationship}--&gt; {edge.target}
           </li>
         ))}
       </ul>
