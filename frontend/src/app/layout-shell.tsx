@@ -1,13 +1,24 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { useLifeOs } from "./life-os-provider";
-import { AuthLoginPage, AuthRegisterPage, AuthResetPage, HelpPage } from "./pages/auth-help-pages";
-import { JournalPage, NotesPage } from "./pages/content-pages";
-import { ExportPage, ImportPage, SettingsPage } from "./pages/data-tools-pages";
-import { DashboardPage } from "./pages/dashboard-page";
-import { CoachPage, SyncPage } from "./pages/insights-sync-pages";
-import { TasksPage, StoragePage } from "./pages/operational-pages";
-import { TimelinePage, GraphPage } from "./pages/timeline-graph-pages";
+import {
+  AuthLoginPage,
+  AuthRegisterPage,
+  AuthResetPage,
+  CoachPage,
+  DashboardPage,
+  ExportPage,
+  GraphPage,
+  HelpPage,
+  ImportPage,
+  JournalPage,
+  NotesPage,
+  SettingsPage,
+  StoragePage,
+  SyncPage,
+  TasksPage,
+  TimelinePage,
+} from "./pages";
 import { downloadContent } from "../core/utils";
 import type { GlobalSearchResult } from "../lib/db/indexeddb";
 
