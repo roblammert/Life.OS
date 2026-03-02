@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { LifeOsProvider, useLifeOs } from "./app/life-os-provider";
 import type { TaskPriority } from "./core/types";
@@ -48,7 +48,17 @@ function Layout() {
 }
 
 function DashboardPage() {
-  const { snapshot } = useLifeOs();
+  const { snapshot, actions } = useLifeOs();
+  const [openTaskCount, setOpenTaskCount] = useState(0);
+  const [recentTitles, setRecentTitles] = useState<string[]>([]);
+
+  useEffect(() => {
+    void (async () => {
+      setOpenTaskCount(await actions.listOpenTasks());
+      setRecentTitles(await actions.listRecentJournalTitles());
+    })();
+  }, [actions, snapshot]);
+
   return (
     <section>
       <h2>Dashboard</h2>
@@ -57,7 +67,16 @@ function DashboardPage() {
         <article className="card">Notes: {snapshot.notes.length}</article>
         <article className="card">Tasks: {snapshot.tasks.length}</article>
         <article className="card">Workbooks: {snapshot.workbooks.length}</article>
+        <article className="card">Open Tasks (DB query): {openTaskCount}</article>
       </div>
+      <h3>Recent Journal Entries (DB query)</h3>
+      <ul className="stack">
+        {recentTitles.map((title) => (
+          <li key={title} className="card">
+            {title}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -278,6 +297,8 @@ function GraphPage() {
 function SettingsPage() {
   const { actions } = useLifeOs();
   const [importText, setImportText] = useState("");
+  const [noteSearch, setNoteSearch] = useState("");
+  const [noteSearchResults, setNoteSearchResults] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
 
   const downloadExport = () => {
@@ -305,6 +326,11 @@ function SettingsPage() {
     setMessage(result.ok ? "Import successful." : `Import failed: ${result.error}`);
   };
 
+  const runNoteSearch = async (event: FormEvent) => {
+    event.preventDefault();
+    setNoteSearchResults(await actions.searchNoteTitles(noteSearch));
+  };
+
   return (
     <section>
       <h2>Settings</h2>
@@ -327,6 +353,21 @@ function SettingsPage() {
           />
           <button type="submit">Import JSON</button>
         </form>
+        <form className="stack" onSubmit={runNoteSearch}>
+          <input
+            value={noteSearch}
+            onChange={(event) => setNoteSearch(event.target.value)}
+            placeholder="Search notes from local DB"
+          />
+          <button type="submit">Search Notes</button>
+        </form>
+        <ul className="stack">
+          {noteSearchResults.map((title) => (
+            <li key={title} className="card">
+              {title}
+            </li>
+          ))}
+        </ul>
         {message ? <p>{message}</p> : null}
       </div>
     </section>

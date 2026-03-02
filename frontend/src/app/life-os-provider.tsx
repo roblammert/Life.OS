@@ -14,6 +14,9 @@ interface LifeOsContextValue {
     syncNow: () => void;
     exportData: () => string;
     importData: (data: string) => { ok: true } | { ok: false; error: string };
+    listOpenTasks: () => Promise<number>;
+    listRecentJournalTitles: () => Promise<string[]>;
+    searchNoteTitles: (query: string) => Promise<string[]>;
   };
 }
 
@@ -26,11 +29,11 @@ export function LifeOsProvider({ children }: { children: ReactNode }) {
   const [isHydrated, setIsHydrated] = useState(false);
 
   const refresh = () => setSnapshot(engineRef.current.getSnapshot());
-  const persist = () => void dbRef.current.saveAppState(engineRef.current.getPersistedState());
+  const persist = () => void dbRef.current.saveNormalizedState(engineRef.current.getPersistedState());
 
   useEffect(() => {
     void (async () => {
-      const persisted = await dbRef.current.loadAppState<PersistedLifeOsState>();
+      const persisted = await dbRef.current.loadNormalizedState();
       if (persisted) {
         engineRef.current.hydrateFromPersistedState(persisted);
         refresh();
@@ -85,6 +88,18 @@ export function LifeOsProvider({ children }: { children: ReactNode }) {
             const message = error instanceof Error ? error.message : "Invalid import data";
             return { ok: false, error: message };
           }
+        },
+        listOpenTasks: async () => {
+          const tasks = await dbRef.current.listTasksByStatus("todo");
+          return tasks.length;
+        },
+        listRecentJournalTitles: async () => {
+          const entries = await dbRef.current.listRecentJournalEntries(5);
+          return entries.map((entry) => entry.title);
+        },
+        searchNoteTitles: async (query) => {
+          const notes = await dbRef.current.searchNotes(query);
+          return notes.map((note) => note.title);
         },
       },
     }),
