@@ -650,6 +650,17 @@ function StoragePage() {
   const [name, setName] = useState("");
   const [metricLabel, setMetricLabel] = useState("");
   const [metricValue, setMetricValue] = useState("0");
+  const [search, setSearch] = useState("");
+
+  const displayedWorkbooks = snapshot.workbooks.filter((workbook) =>
+    workbook.name.toLowerCase().includes(search.trim().toLowerCase()),
+  );
+  const totalMetrics = displayedWorkbooks.reduce((acc, workbook) => acc + workbook.metrics.length, 0);
+  const totalMetricValue = displayedWorkbooks.reduce(
+    (acc, workbook) => acc + workbook.metrics.reduce((inner, metric) => inner + metric.value, 0),
+    0,
+  );
+  const averageMetricValue = totalMetrics > 0 ? totalMetricValue / totalMetrics : 0;
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -673,8 +684,18 @@ function StoragePage() {
         <input value={metricValue} onChange={(event) => setMetricValue(event.target.value)} type="number" placeholder="Metric value" />
         <button type="submit">Create Workbook</button>
       </form>
+      <div className="cards">
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search workbooks"
+        />
+        <article className="card">Visible workbooks: {displayedWorkbooks.length}</article>
+        <article className="card">Metrics: {totalMetrics}</article>
+        <article className="card">Avg metric value: {averageMetricValue.toFixed(2)}</article>
+      </div>
       <ul className="stack">
-        {snapshot.workbooks.map((workbook) => (
+        {displayedWorkbooks.map((workbook) => (
           <li key={workbook.id} className="card">
             <strong>{workbook.name}</strong>
             <ul>
