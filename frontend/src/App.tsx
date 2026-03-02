@@ -384,14 +384,26 @@ function NotesPage() {
   const { snapshot, actions } = useLifeOs();
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [tagsInput, setTagsInput] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (!title.trim() || !content.trim()) return;
-    actions.createNote({ title: title.trim(), contentMarkdown: content.trim() });
+    const tags = tagsInput
+      .split(",")
+      .map((tag) => tag.trim().toLowerCase())
+      .filter((tag) => tag.length > 0);
+    actions.createNote({ title: title.trim(), contentMarkdown: content.trim(), tags });
     setTitle("");
     setContent("");
+    setTagsInput("");
   };
+
+  const displayedNotes = snapshot.notes.filter((note) => {
+    if (!tagFilter.trim()) return true;
+    return note.tags.some((tag) => tag.includes(tagFilter.trim().toLowerCase()));
+  });
 
   return (
     <section>
@@ -399,13 +411,24 @@ function NotesPage() {
       <form className="stack" onSubmit={onSubmit}>
         <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Note title" />
         <textarea value={content} onChange={(event) => setContent(event.target.value)} rows={4} placeholder="Write your note..." />
+        <input
+          value={tagsInput}
+          onChange={(event) => setTagsInput(event.target.value)}
+          placeholder="Tags (comma-separated)"
+        />
         <button type="submit">Save Note</button>
       </form>
+      <input
+        value={tagFilter}
+        onChange={(event) => setTagFilter(event.target.value)}
+        placeholder="Filter notes by tag"
+      />
       <ul className="stack">
-        {snapshot.notes.map((note) => (
+        {displayedNotes.map((note) => (
           <li key={note.id} className="card">
             <strong>{note.title}</strong>
             <p>{note.contentMarkdown}</p>
+            {note.tags.length > 0 ? <p>Tags: {note.tags.join(", ")}</p> : null}
           </li>
         ))}
       </ul>

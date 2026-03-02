@@ -95,12 +95,12 @@ export class LifeOsEngine {
     this.enqueueSyncOperation("journal", entry.id, "create", entry);
   }
 
-  createNote(input: { title: string; contentMarkdown: string }): void {
+  createNote(input: { title: string; contentMarkdown: string; tags?: string[] }): void {
     const note: NoteItem = {
       id: createId("note"),
       title: input.title,
       contentMarkdown: input.contentMarkdown,
-      tags: [],
+      tags: input.tags ?? [],
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };

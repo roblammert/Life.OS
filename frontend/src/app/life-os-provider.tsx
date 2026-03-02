@@ -7,7 +7,7 @@ interface LifeOsContextValue {
   snapshot: ReturnType<LifeOsEngine["getSnapshot"]>;
   actions: {
     createJournalEntry: (input: { title: string; contentMarkdown: string }) => void;
-    createNote: (input: { title: string; contentMarkdown: string }) => void;
+    createNote: (input: { title: string; contentMarkdown: string; tags?: string[] }) => void;
     createTask: (input: { title: string; description: string; priority: TaskPriority; dueDate?: string }) => void;
     completeTask: (taskId: string) => void;
     updateTaskStatus: (taskId: string, status: TaskStatus) => void;
