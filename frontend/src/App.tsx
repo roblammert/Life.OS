@@ -454,6 +454,19 @@ function TasksPage() {
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [dueDate, setDueDate] = useState("");
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
+  const now = Date.now();
+  const nextTask =
+    snapshot.tasks
+      .filter((task) => task.status !== "done")
+      .sort((a, b) => {
+        const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+        const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+        return aDue - bDue;
+      })[0] ?? null;
+  const overdueTasks = snapshot.tasks.filter(
+    (task) => task.dueDate && new Date(task.dueDate).getTime() < now && task.status !== "done",
+  );
+  const blockedTasks = snapshot.tasks.filter((task) => task.status === "blocked");
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -478,6 +491,20 @@ function TasksPage() {
           <option value="list">List View</option>
           <option value="kanban">Kanban View</option>
         </select>
+      </div>
+      <div className="cards">
+        <article className="card">
+          <strong>Next Focus Task</strong>
+          <p>{nextTask ? `${nextTask.title}${nextTask.dueDate ? ` (due ${nextTask.dueDate})` : ""}` : "No open task"}</p>
+        </article>
+        <article className="card">
+          <strong>Overdue</strong>
+          <p>{overdueTasks.length}</p>
+        </article>
+        <article className="card">
+          <strong>Blocked</strong>
+          <p>{blockedTasks.length}</p>
+        </article>
       </div>
       <form className="stack" onSubmit={onSubmit}>
         <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Task title" />
