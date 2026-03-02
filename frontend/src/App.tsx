@@ -383,6 +383,19 @@ function TimelinePage() {
     const textMatch = textFilter.trim() === "" || event.title.toLowerCase().includes(textFilter.toLowerCase());
     return moduleMatch && typeMatch && textMatch;
   });
+  const dailyCounts = filtered.reduce<Record<string, number>>((acc, event) => {
+    const day = event.timestamp.slice(0, 10);
+    acc[day] = (acc[day] ?? 0) + 1;
+    return acc;
+  }, {});
+  const moduleCounts = filtered.reduce<Record<string, number>>((acc, event) => {
+    acc[event.module] = (acc[event.module] ?? 0) + 1;
+    return acc;
+  }, {});
+  const topDays = Object.entries(dailyCounts)
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .slice(0, 5);
+  const topModules = Object.entries(moduleCounts).sort((a, b) => b[1] - a[1]);
 
   return (
     <section>
@@ -403,6 +416,26 @@ function TimelinePage() {
         </select>
         <input value={textFilter} onChange={(event) => setTextFilter(event.target.value)} placeholder="Filter by text" />
       </div>
+      <div className="cards">
+        <article className="card">Filtered events: {filtered.length}</article>
+        <article className="card">Distinct days: {Object.keys(dailyCounts).length}</article>
+      </div>
+      <h3>Recent Daily Activity</h3>
+      <ul className="stack">
+        {topDays.map(([day, count]) => (
+          <li key={day} className="card">
+            {day}: {count} events
+          </li>
+        ))}
+      </ul>
+      <h3>Module Trend Summary</h3>
+      <ul className="stack">
+        {topModules.map(([module, count]) => (
+          <li key={module} className="card">
+            {module}: {count} events
+          </li>
+        ))}
+      </ul>
       <ul className="stack">
         {filtered.map((event) => (
           <li key={event.id} className="card">
@@ -423,11 +456,23 @@ function GraphPage() {
     const textMatch = search.trim() === "" || node.label.toLowerCase().includes(search.toLowerCase());
     return typeMatch && textMatch;
   });
+  const nodeTypeClusters = filteredNodes.reduce<Record<string, number>>((acc, node) => {
+    acc[node.type] = (acc[node.type] ?? 0) + 1;
+    return acc;
+  }, {});
+  const visibleNodeIds = new Set(filteredNodes.map((node) => node.id));
+  const filteredEdges = snapshot.graphEdges.filter(
+    (edge) => visibleNodeIds.has(edge.source) || visibleNodeIds.has(edge.target),
+  );
+  const edgeClusters = filteredEdges.reduce<Record<string, number>>((acc, edge) => {
+    acc[edge.relationship] = (acc[edge.relationship] ?? 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <section>
       <h2>Life Graph</h2>
-      <p>Nodes: {filteredNodes.length} | Edges: {snapshot.graphEdges.length}</p>
+      <p>Nodes: {filteredNodes.length} | Edges: {filteredEdges.length}</p>
       <div className="cards">
         <select value={nodeTypeFilter} onChange={(event) => setNodeTypeFilter(event.target.value as typeof nodeTypeFilter)}>
           <option value="all">All node types</option>
@@ -438,6 +483,22 @@ function GraphPage() {
         </select>
         <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search node labels" />
       </div>
+      <h3>Node Clusters</h3>
+      <ul className="stack">
+        {Object.entries(nodeTypeClusters).map(([type, count]) => (
+          <li key={type} className="card">
+            [{type}] {count}
+          </li>
+        ))}
+      </ul>
+      <h3>Relationship Clusters</h3>
+      <ul className="stack">
+        {Object.entries(edgeClusters).map(([relationship, count]) => (
+          <li key={relationship} className="card">
+            {relationship}: {count}
+          </li>
+        ))}
+      </ul>
       <ul className="stack">
         {filteredNodes.map((node) => (
           <li key={node.id} className="card">
