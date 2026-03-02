@@ -2494,6 +2494,21 @@ function downloadContent(content: string, fileName: string, mimeType: string) {
 function ExportPage() {
   const { actions, snapshot } = useLifeOs();
   const [message, setMessage] = useState<string | null>(null);
+  const exportSummary = {
+    journalEntries: snapshot.journalEntries.length,
+    notes: snapshot.notes.length,
+    tasks: snapshot.tasks.length,
+    workbooks: snapshot.workbooks.length,
+    pendingSync: snapshot.syncQueue.length,
+    timelineEvents: snapshot.timeline.length,
+  };
+  const exportWorkbookMetricsCsv = () => {
+    const rows = snapshot.workbooks.flatMap((workbook) =>
+      workbook.metrics.map((metric) => `${workbook.id},"${workbook.name.replaceAll('"', '""')}","${metric.label.replaceAll('"', '""')}",${metric.value}`),
+    );
+    downloadContent(["workbookId,workbookName,metricLabel,metricValue", ...rows].join("\n"), "life-os-export-workbook-metrics.csv", "text/csv");
+    setMessage("Workbook metrics CSV export created.");
+  };
 
   return (
     <section>
@@ -2568,6 +2583,37 @@ function ExportPage() {
         >
           Export Coach Insights JSON
         </button>
+        <button
+          onClick={() => {
+            downloadContent(JSON.stringify(exportSummary, null, 2), "life-os-export-summary.json", "application/json");
+            setMessage("Export summary JSON created.");
+          }}
+        >
+          Export Summary JSON
+        </button>
+        <button
+          onClick={() => {
+            downloadContent(JSON.stringify(snapshot.syncQueue, null, 2), "life-os-sync-queue.json", "application/json");
+            setMessage("Sync queue JSON export created.");
+          }}
+        >
+          Export Sync Queue JSON
+        </button>
+        <button onClick={exportWorkbookMetricsCsv} disabled={snapshot.workbooks.length === 0}>
+          Export Workbook Metrics CSV
+        </button>
+        <button
+          onClick={() =>
+            void navigator.clipboard?.writeText(
+              Object.entries(exportSummary)
+                .map(([key, value]) => `${key}: ${value}`)
+                .join("\n"),
+            )
+          }
+        >
+          Copy Export Summary
+        </button>
+        <article className="card">Total exportable records: {Object.values(exportSummary).reduce((acc, value) => acc + value, 0)}</article>
         {message ? <p>{message}</p> : null}
       </div>
     </section>
@@ -2579,17 +2625,24 @@ function ImportPage() {
   const [importText, setImportText] = useState("");
   const [csvText, setCsvText] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [trimImportPayload, setTrimImportPayload] = useState(true);
+  const csvPreviewRows = csvText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 
   const importFromText = (event: FormEvent) => {
     event.preventDefault();
-    const result = actions.importData(importText);
+    const payload = trimImportPayload ? importText.trim() : importText;
+    const result = actions.importData(payload);
     setMessage(result.ok ? "Import successful." : `Import failed: ${result.error}`);
   };
 
   const importFromFile = async (file: File) => {
     const text = await file.text();
     setImportText(text);
-    const result = actions.importData(text);
+    const payload = trimImportPayload ? text.trim() : text;
+    const result = actions.importData(payload);
     setMessage(result.ok ? "Import successful." : `Import failed: ${result.error}`);
   };
 
@@ -2689,12 +2742,18 @@ function ImportPage() {
           }}
         />
         <form className="stack" onSubmit={importFromText}>
+          <label>
+            <input type="checkbox" checked={trimImportPayload} onChange={(event) => setTrimImportPayload(event.target.checked)} /> Trim import payload
+          </label>
           <textarea
             rows={8}
             value={importText}
             onChange={(event) => setImportText(event.target.value)}
             placeholder="Paste exported JSON here"
           />
+          <button type="button" onClick={() => void navigator.clipboard?.writeText(importText)} disabled={!importText.trim()}>
+            Copy JSON Input
+          </button>
           <button type="button" onClick={() => setImportText("")}>Clear JSON Input</button>
           <button type="submit">Import JSON</button>
         </form>
@@ -2713,9 +2772,20 @@ function ImportPage() {
             onChange={(event) => setCsvText(event.target.value)}
             placeholder="Paste tasks CSV here (title,description,priority,dueDate,status)"
           />
+          <button
+            type="button"
+            onClick={() => setCsvText("title,description,priority,dueDate,status\nSample task,Imported from sample,medium,,todo")}
+          >
+            Load Sample CSV
+          </button>
           <button type="button" onClick={() => setCsvText("")}>Clear CSV Input</button>
           <button type="submit">Import Tasks CSV</button>
         </form>
+        <button type="button" onClick={() => { setImportText(""); setCsvText(""); setMessage(null); }}>
+          Clear All Inputs
+        </button>
+        <article className="card">CSV preview rows: {csvPreviewRows.length}</article>
+        <article className="card">JSON input chars: {importText.length}</article>
         {message ? <p>{message}</p> : null}
       </div>
     </section>
@@ -2728,6 +2798,9 @@ function SettingsPage() {
   const [noteSearchResults, setNoteSearchResults] = useState<string[]>([]);
   const [openTaskCount, setOpenTaskCount] = useState<number | null>(null);
   const [recentJournalTitles, setRecentJournalTitles] = useState<string[]>([]);
+  const [noteSearchMinLength, setNoteSearchMinLength] = useState(0);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [showStateDetails, setShowStateDetails] = useState(false);
 
   const runNoteSearch = async (event: FormEvent) => {
     event.preventDefault();
@@ -2783,8 +2856,32 @@ function SettingsPage() {
     setRecentJournalTitles([]);
   };
   const exportSearchResultsJson = () => {
-    downloadContent(JSON.stringify(noteSearchResults, null, 2), "life-os-note-search-results.json", "application/json");
+    downloadContent(JSON.stringify(filteredNoteSearchResults, null, 2), "life-os-note-search-results.json", "application/json");
   };
+  const filteredNoteSearchResults = noteSearchResults.filter((title) => title.trim().length >= noteSearchMinLength);
+  const exportSearchResultsTxt = () => {
+    downloadContent(filteredNoteSearchResults.join("\n"), "life-os-note-search-results.txt", "text/plain");
+  };
+  const totalStateRecords =
+    snapshot.journalEntries.length +
+    snapshot.notes.length +
+    snapshot.tasks.length +
+    snapshot.workbooks.length +
+    snapshot.timeline.length +
+    snapshot.graphNodes.length +
+    snapshot.graphEdges.length +
+    snapshot.insights.length;
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    void refreshOpenTaskCount();
+    void refreshRecentJournalTitles();
+    const interval = window.setInterval(() => {
+      void refreshOpenTaskCount();
+      void refreshRecentJournalTitles();
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [autoRefresh]);
 
   return (
     <section>
@@ -2806,8 +2903,23 @@ function SettingsPage() {
         <button type="button" onClick={exportSearchResultsJson} disabled={noteSearchResults.length === 0}>
           Export Search Results JSON
         </button>
+        <button type="button" onClick={exportSearchResultsTxt} disabled={filteredNoteSearchResults.length === 0}>
+          Export Search Results TXT
+        </button>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(filteredNoteSearchResults.join("\n"))} disabled={filteredNoteSearchResults.length === 0}>
+          Copy Search Results
+        </button>
         <button type="button" onClick={quickStateReset}>
           Quick State Reset
+        </button>
+        <button type="button" onClick={() => { setAutoRefresh((current) => !current); }}>
+          {autoRefresh ? "Stop Auto Refresh" : "Start Auto Refresh"}
+        </button>
+        <button type="button" onClick={() => setShowStateDetails((current) => !current)}>
+          {showStateDetails ? "Hide State Details" : "Show State Details"}
+        </button>
+        <button type="button" onClick={() => { void refreshOpenTaskCount(); void refreshRecentJournalTitles(); }}>
+          Refresh All Widgets
         </button>
         <div className="cards">
           <Link to="/export">Open Export</Link>
@@ -2818,12 +2930,27 @@ function SettingsPage() {
           <article className="card">State: notes {snapshot.notes.length}</article>
           <article className="card">State: tasks {snapshot.tasks.length}</article>
           <article className="card">State: workbooks {snapshot.workbooks.length}</article>
+          <article className="card">State: total records {totalStateRecords}</article>
         </div>
+        {showStateDetails ? (
+          <div className="cards">
+            <article className="card">Timeline events: {snapshot.timeline.length}</article>
+            <article className="card">Graph nodes/edges: {snapshot.graphNodes.length} / {snapshot.graphEdges.length}</article>
+            <article className="card">Insights: {snapshot.insights.length}</article>
+          </div>
+        ) : null}
         <form className="stack" onSubmit={runNoteSearch}>
           <input
             value={noteSearch}
             onChange={(event) => setNoteSearch(event.target.value)}
             placeholder="Search notes from local DB"
+          />
+          <input
+            type="number"
+            min={0}
+            value={noteSearchMinLength}
+            onChange={(event) => setNoteSearchMinLength(Math.max(0, Number(event.target.value) || 0))}
+            placeholder="Min title length"
           />
           <button type="button" onClick={() => { setNoteSearch(""); setNoteSearchResults([]); }}>
             Reset Note Search
@@ -2843,7 +2970,7 @@ function SettingsPage() {
           ))}
         </ul>
         <ul className="stack">
-          {noteSearchResults.map((title) => (
+          {filteredNoteSearchResults.map((title) => (
             <li key={title} className="card">
               {title}
             </li>
