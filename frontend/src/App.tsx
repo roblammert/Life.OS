@@ -1,13 +1,11 @@
-import { BrowserRouter } from "react-router-dom";
-import { LifeOsProvider } from "./app/life-os-provider";
-import { LayoutShell } from "./app/layout-shell";
+import React from 'react'
+import { EngineProvider } from './contexts/EngineContext'
+import AppShell from './components/AppShell'
 
 export default function App() {
-  return (
-    <LifeOsProvider>
-      <BrowserRouter>
-        <LayoutShell />
-      </BrowserRouter>
-    </LifeOsProvider>
-  );
+	return (
+		<EngineProvider>
+			<AppShell />
+		</EngineProvider>
+	)
 }
