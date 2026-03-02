@@ -80,7 +80,11 @@ export class LifeOsEngine {
       timestamp: nowIso(),
     });
     this.graphNodes.unshift({ id: entry.id, type: "entry", label: entry.title });
-    this.coach.createInsight("journal", entry.id, `Reflect on "${entry.title}" and capture one next action.`);
+    this.coach.createJournalInsight(entry.id, {
+      date: entry.createdAt,
+      title: entry.title,
+      content: entry.contentMarkdown,
+    });
   }
 
   createNote(input: { title: string; contentMarkdown: string }): void {
@@ -102,7 +106,10 @@ export class LifeOsEngine {
       timestamp: nowIso(),
     });
     this.graphNodes.unshift({ id: note.id, type: "note", label: note.title });
-    this.coach.createInsight("notes", note.id, `Link "${note.title}" to a related task or journal entry.`);
+    this.coach.createNoteInsight(note.id, {
+      title: note.title,
+      content: note.contentMarkdown,
+    });
   }
 
   createTask(input: {
@@ -132,7 +139,11 @@ export class LifeOsEngine {
       timestamp: nowIso(),
     });
     this.graphNodes.unshift({ id: task.id, type: "task", label: task.title });
-    this.coach.createInsight("tasks", task.id, `Break "${task.title}" into two smaller steps to reduce friction.`);
+    this.coach.createTaskInsight(task.id, {
+      title: task.title,
+      description: task.description,
+      status: task.status,
+    });
   }
 
   completeTask(taskId: string): void {
@@ -148,7 +159,11 @@ export class LifeOsEngine {
       eventType: "completed",
       timestamp: nowIso(),
     });
-    this.coach.createInsight("tasks", task.id, `Great completion momentum on "${task.title}". Keep the streak going.`);
+    this.coach.createTaskInsight(task.id, {
+      title: task.title,
+      description: task.description,
+      status: task.status,
+    });
   }
 
   createWorkbook(input: { name: string; metricLabel: string; metricValue: number }): void {
@@ -176,7 +191,11 @@ export class LifeOsEngine {
       target: metric.id,
       relationship: "derived_from",
     });
-    this.coach.createInsight("storage", workbook.id, `Track "${metric.label}" weekly to identify trend changes.`);
+    this.coach.createStorageInsight(workbook.id, {
+      name: workbook.name,
+      metricLabel: metric.label,
+      metricValue: metric.value,
+    });
   }
 
   syncNow(): void {
