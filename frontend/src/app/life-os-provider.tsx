@@ -8,7 +8,7 @@ interface LifeOsContextValue {
   actions: {
     createJournalEntry: (input: { title: string; contentMarkdown: string }) => void;
     createNote: (input: { title: string; contentMarkdown: string; tags?: string[] }) => void;
-    createTask: (input: { title: string; description: string; priority: TaskPriority; dueDate?: string }) => void;
+    createTask: (input: { title: string; description: string; priority: TaskPriority; dueDate?: string }) => string;
     completeTask: (taskId: string) => void;
     updateTaskStatus: (taskId: string, status: TaskStatus) => void;
     createWorkbook: (input: { name: string; metricLabel: string; metricValue: number }) => void;
@@ -66,9 +66,10 @@ export function LifeOsProvider({ children }: { children: ReactNode }) {
           persist();
         },
         createTask: (input) => {
-          engineRef.current.createTask(input);
+          const taskId = engineRef.current.createTask(input);
           refresh();
           persist();
+          return taskId;
         },
         completeTask: (taskId) => {
           engineRef.current.completeTask(taskId);

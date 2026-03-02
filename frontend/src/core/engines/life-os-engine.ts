@@ -128,7 +128,7 @@ export class LifeOsEngine {
     priority: TaskPriority;
     status?: TaskStatus;
     dueDate?: string;
-  }): void {
+  }): string {
     const task: TaskItem = {
       id: createId("task"),
       title: input.title,
@@ -155,6 +155,7 @@ export class LifeOsEngine {
       status: task.status,
     });
     this.enqueueSyncOperation("tasks", task.id, "create", task);
+    return task.id;
   }
 
   completeTask(taskId: string): void {

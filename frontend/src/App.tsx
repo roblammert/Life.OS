@@ -1142,6 +1142,7 @@ function ExportPage() {
 function ImportPage() {
   const { actions } = useLifeOs();
   const [importText, setImportText] = useState("");
+  const [csvText, setCsvText] = useState("");
   const [message, setMessage] = useState<string | null>(null);
 
   const importFromText = (event: FormEvent) => {
@@ -1155,6 +1156,89 @@ function ImportPage() {
     setImportText(text);
     const result = actions.importData(text);
     setMessage(result.ok ? "Import successful." : `Import failed: ${result.error}`);
+  };
+
+  const parseCsvLine = (line: string): string[] => {
+    const values: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i += 1) {
+      const char = line[i];
+      if (char === '"') {
+        const next = line[i + 1];
+        if (inQuotes && next === '"') {
+          current += '"';
+          i += 1;
+          continue;
+        }
+        inQuotes = !inQuotes;
+        continue;
+      }
+      if (char === "," && !inQuotes) {
+        values.push(current);
+        current = "";
+        continue;
+      }
+      current += char;
+    }
+    values.push(current);
+    return values.map((value) => value.trim());
+  };
+
+  const importTasksCsv = (csv: string) => {
+    const lines = csv
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    if (lines.length === 0) {
+      setMessage("CSV is empty.");
+      return;
+    }
+    const headers = parseCsvLine(lines[0]).map((header) => header.toLowerCase());
+    const titleIndex = headers.indexOf("title");
+    const descriptionIndex = headers.indexOf("description");
+    const priorityIndex = headers.indexOf("priority");
+    const dueDateIndex = headers.indexOf("duedate");
+    const statusIndex = headers.indexOf("status");
+    if (titleIndex === -1) {
+      setMessage("CSV import failed: required 'title' column missing.");
+      return;
+    }
+
+    let imported = 0;
+    for (const line of lines.slice(1)) {
+      const values = parseCsvLine(line);
+      const title = values[titleIndex]?.trim();
+      if (!title) continue;
+      const description = descriptionIndex === -1 ? "" : values[descriptionIndex] ?? "";
+      const priorityRaw = (priorityIndex === -1 ? "medium" : values[priorityIndex] ?? "medium").toLowerCase();
+      const priority = priorityRaw === "high" || priorityRaw === "low" ? priorityRaw : "medium";
+      const dueDate = dueDateIndex === -1 ? "" : values[dueDateIndex] ?? "";
+      const status = statusIndex === -1 ? "todo" : (values[statusIndex] ?? "todo").toLowerCase();
+
+      const createdTaskId = actions.createTask({
+        title,
+        description,
+        priority,
+        dueDate: dueDate || undefined,
+      });
+      if (status === "in_progress" || status === "blocked" || status === "done") {
+        actions.updateTaskStatus(createdTaskId, status);
+      }
+      imported += 1;
+    }
+    setMessage(`Imported ${imported} task(s) from CSV.`);
+  };
+
+  const importCsvFromText = (event: FormEvent) => {
+    event.preventDefault();
+    importTasksCsv(csvText);
+  };
+
+  const importCsvFromFile = async (file: File) => {
+    const text = await file.text();
+    setCsvText(text);
+    importTasksCsv(text);
   };
 
   return (
@@ -1177,6 +1261,23 @@ function ImportPage() {
             placeholder="Paste exported JSON here"
           />
           <button type="submit">Import JSON</button>
+        </form>
+        <input
+          type="file"
+          accept=".csv,text/csv"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void importCsvFromFile(file);
+          }}
+        />
+        <form className="stack" onSubmit={importCsvFromText}>
+          <textarea
+            rows={8}
+            value={csvText}
+            onChange={(event) => setCsvText(event.target.value)}
+            placeholder="Paste tasks CSV here (title,description,priority,dueDate,status)"
+          />
+          <button type="submit">Import Tasks CSV</button>
         </form>
         {message ? <p>{message}</p> : null}
       </div>
