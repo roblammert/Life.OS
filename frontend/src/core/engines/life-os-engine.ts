@@ -254,6 +254,41 @@ export class LifeOsEngine {
     return this.coach.generateReview(period);
   }
 
+  exportJournalMarkdownBundle(): string {
+    return this.journalEntries
+      .map(
+        (entry) =>
+          `# ${entry.title}\n\nDate: ${entry.createdAt}\n\n${entry.contentMarkdown}\n`,
+      )
+      .join("\n---\n\n");
+  }
+
+  exportNotesMarkdownBundle(): string {
+    return this.notes
+      .map(
+        (note) =>
+          `# ${note.title}\n\nDate: ${note.createdAt}\n\n${note.contentMarkdown}\n`,
+      )
+      .join("\n---\n\n");
+  }
+
+  exportTasksCsv(): string {
+    const header = "id,title,description,status,priority,dueDate,createdAt,updatedAt";
+    const rows = this.tasks.map((task) =>
+      [
+        task.id,
+        this.escapeCsv(task.title),
+        this.escapeCsv(task.description),
+        task.status,
+        task.priority,
+        task.dueDate ?? "",
+        task.createdAt,
+        task.updatedAt,
+      ].join(","),
+    );
+    return [header, ...rows].join("\n");
+  }
+
   private enqueueSyncOperation(
     module: SyncOperation["module"],
     entityId: string,
@@ -268,6 +303,11 @@ export class LifeOsEngine {
       payload,
       createdAt: nowIso(),
     });
+  }
+
+  private escapeCsv(value: string): string {
+    const escaped = value.replaceAll('"', '""');
+    return `"${escaped}"`;
   }
 }
 

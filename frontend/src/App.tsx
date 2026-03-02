@@ -529,6 +529,16 @@ function SettingsPage() {
     setMessage("Export created.");
   };
 
+  const downloadFile = (content: string, fileName: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const importFromText = (event: FormEvent) => {
     event.preventDefault();
     const result = actions.importData(importText);
@@ -552,6 +562,30 @@ function SettingsPage() {
       <h2>Settings</h2>
       <div className="stack">
         <button onClick={downloadExport}>Export JSON</button>
+        <button
+          onClick={() => {
+            downloadFile(actions.exportJournalMarkdown(), "life-os-journal.md", "text/markdown");
+            setMessage("Journal markdown export created.");
+          }}
+        >
+          Export Journal Markdown
+        </button>
+        <button
+          onClick={() => {
+            downloadFile(actions.exportNotesMarkdown(), "life-os-notes.md", "text/markdown");
+            setMessage("Notes markdown export created.");
+          }}
+        >
+          Export Notes Markdown
+        </button>
+        <button
+          onClick={() => {
+            downloadFile(actions.exportTasksCsv(), "life-os-tasks.csv", "text/csv");
+            setMessage("Tasks CSV export created.");
+          }}
+        >
+          Export Tasks CSV
+        </button>
         <input
           type="file"
           accept=".json,application/json"

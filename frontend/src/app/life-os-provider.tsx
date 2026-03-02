@@ -20,6 +20,9 @@ interface LifeOsContextValue {
     searchGlobal: (query: string) => Promise<GlobalSearchResult[]>;
     generateNotifications: () => NotificationItem[];
     generateReview: (period: "daily" | "weekly") => ReviewSummary;
+    exportJournalMarkdown: () => string;
+    exportNotesMarkdown: () => string;
+    exportTasksCsv: () => string;
   };
 }
 
@@ -107,6 +110,9 @@ export function LifeOsProvider({ children }: { children: ReactNode }) {
         searchGlobal: async (query) => dbRef.current.searchAllModules(query),
         generateNotifications: () => engineRef.current.generateNotifications(),
         generateReview: (period) => engineRef.current.generateReview(period),
+        exportJournalMarkdown: () => engineRef.current.exportJournalMarkdownBundle(),
+        exportNotesMarkdown: () => engineRef.current.exportNotesMarkdownBundle(),
+        exportTasksCsv: () => engineRef.current.exportTasksCsv(),
       },
     }),
     [snapshot],
