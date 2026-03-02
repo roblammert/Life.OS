@@ -21,4 +21,12 @@ export class SyncQueue {
   list(): SyncOperation[] {
     return [...this.queue];
   }
+
+  clear(): void {
+    this.queue = [];
+  }
+
+  hydrate(operations: SyncOperation[]): void {
+    this.queue = [...operations];
+  }
 }

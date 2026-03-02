@@ -14,6 +14,7 @@ function Layout() {
           Sync: {snapshot.syncStatus.state}
           {snapshot.syncStatus.lastSyncedAt ? ` (${new Date(snapshot.syncStatus.lastSyncedAt).toLocaleTimeString()})` : ""}
         </button>
+        <span>Pending sync ops: {snapshot.syncQueue.length}</span>
       </header>
 
       <nav className="nav">
@@ -275,10 +276,59 @@ function GraphPage() {
 }
 
 function SettingsPage() {
+  const { actions } = useLifeOs();
+  const [importText, setImportText] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+
+  const downloadExport = () => {
+    const data = actions.exportData();
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `life-os-export-${new Date().toISOString()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setMessage("Export created.");
+  };
+
+  const importFromText = (event: FormEvent) => {
+    event.preventDefault();
+    const result = actions.importData(importText);
+    setMessage(result.ok ? "Import successful." : `Import failed: ${result.error}`);
+  };
+
+  const importFromFile = async (file: File) => {
+    const text = await file.text();
+    setImportText(text);
+    const result = actions.importData(text);
+    setMessage(result.ok ? "Import successful." : `Import failed: ${result.error}`);
+  };
+
   return (
     <section>
       <h2>Settings</h2>
-      <p>Theme, sync interval, and export/import controls will be added here.</p>
+      <div className="stack">
+        <button onClick={downloadExport}>Export JSON</button>
+        <input
+          type="file"
+          accept=".json,application/json"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void importFromFile(file);
+          }}
+        />
+        <form className="stack" onSubmit={importFromText}>
+          <textarea
+            rows={8}
+            value={importText}
+            onChange={(event) => setImportText(event.target.value)}
+            placeholder="Paste exported JSON here"
+          />
+          <button type="submit">Import JSON</button>
+        </form>
+        {message ? <p>{message}</p> : null}
+      </div>
     </section>
   );
 }

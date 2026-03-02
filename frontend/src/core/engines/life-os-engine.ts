@@ -10,6 +10,7 @@ import type {
   Workbook,
 } from "../types";
 import { createId, nowIso } from "../utils";
+import { type SyncOperation, SyncQueue } from "../../lib/db/sync-queue";
 import { CoachEngine } from "./coach-engine";
 import { SyncEngine } from "./sync-engine";
 
@@ -23,6 +24,7 @@ export interface LifeOsSnapshot {
   graphEdges: LifeGraphEdge[];
   insights: ReturnType<CoachEngine["listInsights"]>;
   syncStatus: ReturnType<SyncEngine["getStatus"]>;
+  syncQueue: SyncOperation[];
 }
 
 export interface PersistedLifeOsState {
@@ -35,6 +37,7 @@ export interface PersistedLifeOsState {
   graphEdges: LifeGraphEdge[];
   insights: ReturnType<CoachEngine["listInsights"]>;
   lastSyncedAt?: string;
+  syncQueue?: SyncOperation[];
 }
 
 export class LifeOsEngine {
@@ -47,6 +50,7 @@ export class LifeOsEngine {
   private timeline: TimelineEvent[] = [];
   private graphNodes: LifeGraphNode[] = [];
   private graphEdges: LifeGraphEdge[] = [];
+  private readonly syncQueue = new SyncQueue();
 
   hydrateFromPersistedState(state: PersistedLifeOsState): void {
     this.journalEntries = [...state.journalEntries];
@@ -58,6 +62,7 @@ export class LifeOsEngine {
     this.graphEdges = [...state.graphEdges];
     this.coach.hydrateInsights(state.insights);
     this.sync.hydrate(state.lastSyncedAt);
+    this.syncQueue.hydrate(state.syncQueue ?? []);
   }
 
   createJournalEntry(input: { title: string; contentMarkdown: string }): void {
@@ -85,6 +90,7 @@ export class LifeOsEngine {
       title: entry.title,
       content: entry.contentMarkdown,
     });
+    this.enqueueSyncOperation("journal", entry.id, "create", entry);
   }
 
   createNote(input: { title: string; contentMarkdown: string }): void {
@@ -110,6 +116,7 @@ export class LifeOsEngine {
       title: note.title,
       content: note.contentMarkdown,
     });
+    this.enqueueSyncOperation("notes", note.id, "create", note);
   }
 
   createTask(input: {
@@ -144,6 +151,7 @@ export class LifeOsEngine {
       description: task.description,
       status: task.status,
     });
+    this.enqueueSyncOperation("tasks", task.id, "create", task);
   }
 
   completeTask(taskId: string): void {
@@ -164,6 +172,7 @@ export class LifeOsEngine {
       description: task.description,
       status: task.status,
     });
+    this.enqueueSyncOperation("tasks", task.id, "update", task);
   }
 
   createWorkbook(input: { name: string; metricLabel: string; metricValue: number }): void {
@@ -196,10 +205,12 @@ export class LifeOsEngine {
       metricLabel: metric.label,
       metricValue: metric.value,
     });
+    this.enqueueSyncOperation("storage", workbook.id, "create", workbook);
   }
 
   syncNow(): void {
     this.sync.markSyncing();
+    this.syncQueue.clear();
     this.sync.markComplete();
   }
 
@@ -214,6 +225,7 @@ export class LifeOsEngine {
       graphEdges: [...this.graphEdges],
       insights: this.coach.listInsights(),
       syncStatus: this.sync.getStatus(),
+      syncQueue: this.syncQueue.list(),
     };
   }
 
@@ -228,7 +240,24 @@ export class LifeOsEngine {
       graphEdges: [...this.graphEdges],
       insights: this.coach.listInsights(),
       lastSyncedAt: this.sync.getStatus().lastSyncedAt,
+      syncQueue: this.syncQueue.list(),
     };
+  }
+
+  private enqueueSyncOperation(
+    module: SyncOperation["module"],
+    entityId: string,
+    operation: SyncOperation["operation"],
+    payload: unknown,
+  ): void {
+    this.syncQueue.enqueue({
+      id: createId("sync"),
+      module,
+      entityId,
+      operation,
+      payload,
+      createdAt: nowIso(),
+    });
   }
 }
 

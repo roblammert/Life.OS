@@ -12,6 +12,8 @@ interface LifeOsContextValue {
     completeTask: (taskId: string) => void;
     createWorkbook: (input: { name: string; metricLabel: string; metricValue: number }) => void;
     syncNow: () => void;
+    exportData: () => string;
+    importData: (data: string) => { ok: true } | { ok: false; error: string };
   };
 }
 
@@ -70,6 +72,19 @@ export function LifeOsProvider({ children }: { children: ReactNode }) {
           engineRef.current.syncNow();
           refresh();
           persist();
+        },
+        exportData: () => JSON.stringify(engineRef.current.getPersistedState(), null, 2),
+        importData: (data) => {
+          try {
+            const parsed = JSON.parse(data) as PersistedLifeOsState;
+            engineRef.current.hydrateFromPersistedState(parsed);
+            refresh();
+            persist();
+            return { ok: true };
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Invalid import data";
+            return { ok: false, error: message };
+          }
         },
       },
     }),
