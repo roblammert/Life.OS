@@ -139,6 +139,24 @@ function Layout() {
   const exportVisibleSearchResultsTxt = () => {
     downloadContent(visibleResults.map((result) => `[${result.module}] ${result.label}`).join("\n"), "life-os-search-results-visible.txt", "text/plain");
   };
+  const exportAppStatusJson = () => {
+    downloadContent(
+      JSON.stringify(
+        {
+          auth: isAuthenticated ? authEmail : "guest",
+          online: isOnline,
+          layoutMode,
+          theme,
+          pendingSync: snapshot.syncQueue.length,
+          syncState: snapshot.syncStatus.state,
+        },
+        null,
+        2,
+      ),
+      "life-os-app-status.json",
+      "application/json",
+    );
+  };
 
   return (
     <div className={`app-shell theme-${theme} layout-${layoutMode}`}>
@@ -233,6 +251,15 @@ function Layout() {
           disabled={Object.keys(moduleResultCounts).length === 0}
         >
           Copy Module Counts
+        </button>
+        <button type="button" onClick={exportAppStatusJson}>
+          Export App Status JSON
+        </button>
+        <button
+          type="button"
+          onClick={() => void navigator.clipboard?.writeText(`auth=${isAuthenticated ? authEmail : "guest"}\nonline=${isOnline}\nlayout=${layoutMode}\ntheme=${theme}`)}
+        >
+          Copy App Status
         </button>
       </div>
       {visibleResults.length > 0 ? (
@@ -528,6 +555,7 @@ function HelpPage() {
         </button>
         <Link to="/export">Open Export</Link>
         <Link to="/import">Open Import</Link>
+        <Link to="/settings">Open Settings</Link>
         <article className="card">Visible help items: {visibleItems.length}</article>
         <article className="card">Visible categories: {visibleCategories.join(", ") || "none"}</article>
       </div>
@@ -2768,6 +2796,16 @@ function ExportPage() {
     downloadContent(JSON.stringify(payload, null, 2), "life-os-local-preferences.json", "application/json");
     setMessage("Local preferences JSON export created.");
   };
+  const exportSummaryTxt = () => {
+    downloadContent(
+      Object.entries(exportSummary)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join("\n"),
+      "life-os-export-summary.txt",
+      "text/plain",
+    );
+    setMessage("Export summary TXT created.");
+  };
 
   return (
     <section>
@@ -2872,12 +2910,16 @@ function ExportPage() {
         >
           Copy Export Summary
         </button>
+        <button onClick={exportSummaryTxt}>
+          Export Summary TXT
+        </button>
         <button type="button" onClick={() => void navigator.clipboard?.writeText(actions.exportData())}>
           Copy Full JSON Export
         </button>
         <button type="button" onClick={exportPreferencesJson}>
           Export Local Preferences JSON
         </button>
+        <Link to="/settings">Open Settings</Link>
         <button type="button" onClick={() => void navigator.clipboard?.writeText(["life-os-export-summary.json", "life-os-sync-queue.json", "life-os-export-workbook-metrics.csv"].join("\n"))}>
           Copy Export File List
         </button>
@@ -3118,6 +3160,20 @@ function SettingsPage() {
     };
     downloadContent(JSON.stringify(payload, null, 2), "life-os-state-stats.json", "application/json");
   };
+  const exportStateStatsTxt = () => {
+    const lines = [
+      `journalEntries: ${snapshot.journalEntries.length}`,
+      `notes: ${snapshot.notes.length}`,
+      `tasks: ${snapshot.tasks.length}`,
+      `workbooks: ${snapshot.workbooks.length}`,
+      `timelineEvents: ${snapshot.timeline.length}`,
+      `graphNodes: ${snapshot.graphNodes.length}`,
+      `graphEdges: ${snapshot.graphEdges.length}`,
+      `insights: ${snapshot.insights.length}`,
+      `totalRecords: ${totalStateRecords}`,
+    ];
+    downloadContent(lines.join("\n"), "life-os-state-stats.txt", "text/plain");
+  };
   const copyStateStats = () => {
     const payload = {
       journalEntries: snapshot.journalEntries.length,
@@ -3207,6 +3263,9 @@ function SettingsPage() {
         <button type="button" onClick={copyStateStats}>
           Copy State Stats
         </button>
+        <button type="button" onClick={exportStateStatsTxt}>
+          Export State Stats TXT
+        </button>
         <button type="button" onClick={clearCachedSearch}>
           Clear Cached Search
         </button>
@@ -3257,9 +3316,11 @@ function SettingsPage() {
           Copy Total State Summary
         </button>
         <article className="card">Auto refresh interval: {refreshIntervalSeconds}s</article>
+        <article className="card">Filtered note results: {filteredNoteSearchResults.length}</article>
         <div className="cards">
           <Link to="/export">Open Export</Link>
           <Link to="/import">Open Import</Link>
+          <Link to="/help">Open Help</Link>
         </div>
         <div className="cards">
           <article className="card">State: journal {snapshot.journalEntries.length}</article>
