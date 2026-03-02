@@ -713,11 +713,45 @@ function CoachPage() {
   const [notifications, setNotifications] = useState<ReturnType<typeof actions.generateNotifications>>([]);
   const [review, setReview] = useState<ReturnType<typeof actions.generateReview> | null>(null);
   const [lifeMoments, setLifeMoments] = useState<ReturnType<typeof actions.generateLifeMoments>>([]);
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setNotifications(actions.generateNotifications());
     setLifeMoments(actions.generateLifeMoments());
   }, [actions, snapshot.insights]);
+
+  const exportReviewMarkdown = () => {
+    if (!review) {
+      setMessage("Generate a review first.");
+      return;
+    }
+    const lines = [
+      `# ${review.period === "daily" ? "Daily Review" : "Weekly Review"}`,
+      "",
+      review.summary,
+      "",
+      "## Lessons",
+      ...review.lessons.map((lesson) => `- ${lesson}`),
+      "",
+      "## Next Focus",
+      ...review.nextFocus.map((focus) => `- ${focus}`),
+    ];
+    downloadContent(lines.join("\n"), `life-os-${review.period}-review.md`, "text/markdown");
+    setMessage(`${review.period} review export created.`);
+  };
+
+  const exportLifeMomentsCsv = () => {
+    const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const rows = lifeMoments.map((moment) =>
+      [moment.id, moment.date, escape(moment.title), escape(moment.description), escape(moment.whyItMatters)].join(","),
+    );
+    downloadContent(
+      ["id,date,title,description,whyItMatters", ...rows].join("\n"),
+      "life-os-life-moments.csv",
+      "text/csv",
+    );
+    setMessage("Life Moments CSV export created.");
+  };
 
   return (
     <section>
@@ -725,7 +759,10 @@ function CoachPage() {
       <div className="cards">
         <button onClick={() => setReview(actions.generateReview("daily"))}>Generate Daily Review</button>
         <button onClick={() => setReview(actions.generateReview("weekly"))}>Generate Weekly Review</button>
+        <button onClick={exportReviewMarkdown}>Export Review Markdown</button>
+        <button onClick={exportLifeMomentsCsv}>Export Life Moments CSV</button>
       </div>
+      {message ? <p>{message}</p> : null}
       {review ? (
         <article className="card">
           <h3>{review.period === "daily" ? "Daily Review" : "Weekly Review"}</h3>
