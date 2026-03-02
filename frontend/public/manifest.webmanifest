@@ -1,1 +1,9 @@
-{}
+{
+  "name": "Life.OS",
+  "short_name": "Life.OS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1d4ed8",
+  "description": "Offline-first personal operating system for journaling, notes, tasks, storage, and local coaching."
+}
