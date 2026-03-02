@@ -83,6 +83,12 @@ function Layout() {
     await installPrompt.userChoice;
     setInstallPrompt(null);
   };
+  const routeByModule: Record<string, string> = {
+    journal: "/journal",
+    notes: "/notes",
+    tasks: "/tasks",
+    storage: "/storage",
+  };
 
   return (
     <div className={`app-shell theme-${theme} layout-${layoutMode}`}>
@@ -131,6 +137,7 @@ function Layout() {
             <li key={result.id} className="card">
               <strong>{result.module}</strong> — {result.label}
               <p>{result.preview}</p>
+              <Link to={routeByModule[result.module] ?? "/"}>Open Module</Link>
             </li>
           ))}
         </ul>
@@ -1041,12 +1048,17 @@ function TimelinePage() {
   const [eventTypeFilter, setEventTypeFilter] = useState<"all" | "created" | "updated" | "completed">("all");
   const [timelineView, setTimelineView] = useState<"daily" | "weekly" | "monthly" | "yearly">("daily");
   const [textFilter, setTextFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   const filtered = snapshot.timeline.filter((event) => {
     const moduleMatch = moduleFilter === "all" || event.module === moduleFilter;
     const typeMatch = eventTypeFilter === "all" || event.eventType === eventTypeFilter;
     const textMatch = textFilter.trim() === "" || event.title.toLowerCase().includes(textFilter.toLowerCase());
-    return moduleMatch && typeMatch && textMatch;
+    const eventDate = event.timestamp.slice(0, 10);
+    const startMatch = startDate === "" || eventDate >= startDate;
+    const endMatch = endDate === "" || eventDate <= endDate;
+    return moduleMatch && typeMatch && textMatch && startMatch && endMatch;
   });
   const toWeekBucket = (timestamp: string): string => {
     const date = new Date(timestamp);
@@ -1075,6 +1087,10 @@ function TimelinePage() {
     .sort((a, b) => b[0].localeCompare(a[0]))
     .slice(0, 5);
   const topModules = Object.entries(moduleCounts).sort((a, b) => b[1] - a[1]);
+  const eventTypeCounts = filtered.reduce<Record<string, number>>((acc, event) => {
+    acc[event.eventType] = (acc[event.eventType] ?? 0) + 1;
+    return acc;
+  }, {});
   const exportFilteredTimelineCsv = () => {
     const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
     const header = "id,module,eventType,timestamp,title";
@@ -1086,6 +1102,9 @@ function TimelinePage() {
       `life-os-timeline-${timelineView}.csv`,
       "text/csv",
     );
+  };
+  const exportFilteredTimelineJson = () => {
+    downloadContent(JSON.stringify(filtered, null, 2), `life-os-timeline-${timelineView}.json`, "application/json");
   };
 
   return (
@@ -1112,11 +1131,20 @@ function TimelinePage() {
           <option value="yearly">Yearly</option>
         </select>
         <input value={textFilter} onChange={(event) => setTextFilter(event.target.value)} placeholder="Filter by text" />
+        <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+        <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+        <button type="button" onClick={() => { setModuleFilter("all"); setEventTypeFilter("all"); setTimelineView("daily"); setTextFilter(""); setStartDate(""); setEndDate(""); }}>
+          Reset Filters
+        </button>
       </div>
       <div className="cards">
         <article className="card">Filtered events: {filtered.length}</article>
         <article className="card">Distinct {timelineView} periods: {Object.keys(groupedCounts).length}</article>
         <button onClick={exportFilteredTimelineCsv}>Export Filtered Timeline CSV</button>
+        <button onClick={exportFilteredTimelineJson}>Export Filtered Timeline JSON</button>
+        <article className="card">Created: {eventTypeCounts.created ?? 0}</article>
+        <article className="card">Updated: {eventTypeCounts.updated ?? 0}</article>
+        <article className="card">Completed: {eventTypeCounts.completed ?? 0}</article>
       </div>
       <h3>Recent {timelineView} Activity</h3>
       <ul className="stack">
@@ -1150,6 +1178,7 @@ function GraphPage() {
   const [nodeTypeFilter, setNodeTypeFilter] = useState<"all" | "entry" | "note" | "task" | "metric">("all");
   const [relationshipFilter, setRelationshipFilter] = useState<"all" | "mentions" | "related_to" | "derived_from">("all");
   const [search, setSearch] = useState("");
+  const [edgeSearch, setEdgeSearch] = useState("");
   const filteredNodes = snapshot.graphNodes.filter((node) => {
     const typeMatch = nodeTypeFilter === "all" || node.type === nodeTypeFilter;
     const textMatch = search.trim() === "" || node.label.toLowerCase().includes(search.toLowerCase());
@@ -1160,20 +1189,39 @@ function GraphPage() {
     return acc;
   }, {});
   const visibleNodeIds = new Set(filteredNodes.map((node) => node.id));
+  const nodeLabelById = Object.fromEntries(snapshot.graphNodes.map((node) => [node.id, node.label]));
   const filteredEdges = snapshot.graphEdges.filter(
-    (edge) =>
-      (visibleNodeIds.has(edge.source) || visibleNodeIds.has(edge.target)) &&
-      (relationshipFilter === "all" || edge.relationship === relationshipFilter),
+    (edge) => {
+      const sourceLabel = nodeLabelById[edge.source] ?? edge.source;
+      const targetLabel = nodeLabelById[edge.target] ?? edge.target;
+      const textMatch =
+        edgeSearch.trim() === "" ||
+        `${sourceLabel} ${edge.relationship} ${targetLabel}`.toLowerCase().includes(edgeSearch.toLowerCase());
+      return (
+        (visibleNodeIds.has(edge.source) || visibleNodeIds.has(edge.target)) &&
+        (relationshipFilter === "all" || edge.relationship === relationshipFilter) &&
+        textMatch
+      );
+    },
   );
   const edgeClusters = filteredEdges.reduce<Record<string, number>>((acc, edge) => {
     acc[edge.relationship] = (acc[edge.relationship] ?? 0) + 1;
     return acc;
   }, {});
+  const connectedNodeIds = new Set(filteredEdges.flatMap((edge) => [edge.source, edge.target]));
+  const isolatedNodeCount = filteredNodes.filter((node) => !connectedNodeIds.has(node.id)).length;
+  const exportFilteredGraphJson = () => {
+    downloadContent(
+      JSON.stringify({ nodes: filteredNodes, edges: filteredEdges }, null, 2),
+      "life-os-graph-filtered.json",
+      "application/json",
+    );
+  };
 
   return (
     <section>
       <h2>Life Graph</h2>
-      <p>Nodes: {filteredNodes.length} | Edges: {filteredEdges.length}</p>
+      <p>Nodes: {filteredNodes.length} | Edges: {filteredEdges.length} | Isolated nodes: {isolatedNodeCount}</p>
       <div className="cards">
         <select value={nodeTypeFilter} onChange={(event) => setNodeTypeFilter(event.target.value as typeof nodeTypeFilter)}>
           <option value="all">All node types</option>
@@ -1189,6 +1237,11 @@ function GraphPage() {
           <option value="derived_from">derived_from</option>
         </select>
         <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search node labels" />
+        <input value={edgeSearch} onChange={(event) => setEdgeSearch(event.target.value)} placeholder="Search edges" />
+        <button type="button" onClick={exportFilteredGraphJson}>Export Filtered Graph JSON</button>
+        <button type="button" onClick={() => { setNodeTypeFilter("all"); setRelationshipFilter("all"); setSearch(""); setEdgeSearch(""); }}>
+          Reset Filters
+        </button>
       </div>
       <h3>Node Clusters</h3>
       <ul className="stack">
@@ -1210,7 +1263,7 @@ function GraphPage() {
       <ul className="stack">
         {filteredEdges.map((edge) => (
           <li key={edge.id} className="card">
-            {edge.source} --{edge.relationship}--&gt; {edge.target}
+            {nodeLabelById[edge.source] ?? edge.source} --{edge.relationship}--&gt; {nodeLabelById[edge.target] ?? edge.target}
           </li>
         ))}
       </ul>
@@ -1236,7 +1289,7 @@ function downloadContent(content: string, fileName: string, mimeType: string) {
 }
 
 function ExportPage() {
-  const { actions } = useLifeOs();
+  const { actions, snapshot } = useLifeOs();
   const [message, setMessage] = useState<string | null>(null);
 
   return (
@@ -1274,6 +1327,35 @@ function ExportPage() {
           }}
         >
           Export Tasks CSV
+        </button>
+        <button
+          onClick={() => {
+            const bundle = ["# Life.OS Bundle", "", "## Journal", "", actions.exportJournalMarkdown(), "", "## Notes", "", actions.exportNotesMarkdown()].join("\n");
+            downloadContent(bundle, "life-os-bundle.md", "text/markdown");
+            setMessage("Markdown bundle export created.");
+          }}
+        >
+          Export Markdown Bundle
+        </button>
+        <button
+          onClick={() => {
+            downloadContent(JSON.stringify(snapshot.timeline, null, 2), "life-os-timeline.json", "application/json");
+            setMessage("Timeline JSON export created.");
+          }}
+        >
+          Export Timeline JSON
+        </button>
+        <button
+          onClick={() => {
+            downloadContent(
+              JSON.stringify({ nodes: snapshot.graphNodes, edges: snapshot.graphEdges }, null, 2),
+              "life-os-graph.json",
+              "application/json",
+            );
+            setMessage("Graph JSON export created.");
+          }}
+        >
+          Export Graph JSON
         </button>
         {message ? <p>{message}</p> : null}
       </div>
@@ -1402,6 +1484,7 @@ function ImportPage() {
             onChange={(event) => setImportText(event.target.value)}
             placeholder="Paste exported JSON here"
           />
+          <button type="button" onClick={() => setImportText("")}>Clear JSON Input</button>
           <button type="submit">Import JSON</button>
         </form>
         <input
@@ -1419,6 +1502,7 @@ function ImportPage() {
             onChange={(event) => setCsvText(event.target.value)}
             placeholder="Paste tasks CSV here (title,description,priority,dueDate,status)"
           />
+          <button type="button" onClick={() => setCsvText("")}>Clear CSV Input</button>
           <button type="submit">Import Tasks CSV</button>
         </form>
         {message ? <p>{message}</p> : null}
@@ -1431,10 +1515,18 @@ function SettingsPage() {
   const { actions } = useLifeOs();
   const [noteSearch, setNoteSearch] = useState("");
   const [noteSearchResults, setNoteSearchResults] = useState<string[]>([]);
+  const [openTaskCount, setOpenTaskCount] = useState<number | null>(null);
+  const [recentJournalTitles, setRecentJournalTitles] = useState<string[]>([]);
 
   const runNoteSearch = async (event: FormEvent) => {
     event.preventDefault();
     setNoteSearchResults(await actions.searchNoteTitles(noteSearch));
+  };
+  const refreshOpenTaskCount = async () => {
+    setOpenTaskCount(await actions.listOpenTasks());
+  };
+  const refreshRecentJournalTitles = async () => {
+    setRecentJournalTitles(await actions.listRecentJournalTitles());
   };
 
   return (
@@ -1452,8 +1544,23 @@ function SettingsPage() {
             onChange={(event) => setNoteSearch(event.target.value)}
             placeholder="Search notes from local DB"
           />
+          <button type="button" onClick={() => { setNoteSearch(""); setNoteSearchResults([]); }}>
+            Reset Note Search
+          </button>
           <button type="submit">Search Notes</button>
         </form>
+        <div className="cards">
+          <button onClick={() => void refreshOpenTaskCount()}>Refresh Open Task Count</button>
+          <article className="card">Open tasks: {openTaskCount ?? "Not loaded"}</article>
+          <button onClick={() => void refreshRecentJournalTitles()}>Refresh Recent Journal Titles</button>
+        </div>
+        <ul className="stack">
+          {recentJournalTitles.map((title) => (
+            <li key={title} className="card">
+              {title}
+            </li>
+          ))}
+        </ul>
         <ul className="stack">
           {noteSearchResults.map((title) => (
             <li key={title} className="card">
