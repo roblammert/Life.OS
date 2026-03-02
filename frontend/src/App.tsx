@@ -295,6 +295,14 @@ function DashboardPage() {
     .filter((task) => task.dueDate && task.status !== "done")
     .sort((a, b) => new Date(a.dueDate ?? "").getTime() - new Date(b.dueDate ?? "").getTime())
     .slice(0, 3);
+  const overdueTasks = snapshot.tasks
+    .filter((task) => task.dueDate && new Date(task.dueDate).getTime() < Date.now() && task.status !== "done")
+    .sort((a, b) => new Date(a.dueDate ?? "").getTime() - new Date(b.dueDate ?? "").getTime())
+    .slice(0, 3);
+  const exportModuleActivityCsv = () => {
+    const rows = Object.entries(moduleActivity).map(([module, count]) => `${module},${count}`);
+    downloadContent(["module,count", ...rows].join("\n"), "life-os-module-activity.csv", "text/csv");
+  };
 
   useEffect(() => {
     void (async () => {
@@ -361,6 +369,9 @@ function DashboardPage() {
         ))}
       </ul>
       <h3>7-Day Module Activity</h3>
+      <button type="button" onClick={exportModuleActivityCsv} disabled={Object.keys(moduleActivity).length === 0}>
+        Export Module Activity CSV
+      </button>
       <ul className="stack">
         {Object.entries(moduleActivity).map(([module, count]) => (
           <li key={module} className="card">
@@ -384,6 +395,14 @@ function DashboardPage() {
           </li>
         ))}
       </ul>
+      <h3>Overdue Task Preview</h3>
+      <ul className="stack">
+        {overdueTasks.map((task) => (
+          <li key={task.id} className="card">
+            {task.title} — due {task.dueDate}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -394,6 +413,11 @@ function JournalPage() {
   const [content, setContent] = useState("");
   const [search, setSearch] = useState("");
   const [sentimentFilter, setSentimentFilter] = useState<"all" | "positive" | "neutral" | "negative">("all");
+  const journalTemplates = [
+    "What went well today?",
+    "What challenged me today?",
+    "What is one next action for tomorrow?",
+  ];
   const exportFilteredMarkdown = () => {
     if (displayedEntries.length === 0) return;
     const markdown = displayedEntries.map((entry) => `## ${entry.title}\n\n${entry.contentMarkdown}\n`).join("\n");
@@ -431,6 +455,13 @@ function JournalPage() {
       <form className="stack" onSubmit={onSubmit}>
         <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Entry title" />
         <textarea value={content} onChange={(event) => setContent(event.target.value)} rows={4} placeholder="Write your entry..." />
+        <div className="cards">
+          {journalTemplates.map((template) => (
+            <button key={template} type="button" onClick={() => setContent((current) => `${current}${current ? "\n\n" : ""}${template}`)}>
+              Add Template
+            </button>
+          ))}
+        </div>
         <button type="submit">Save Entry</button>
       </form>
       <div className="cards">
@@ -451,6 +482,7 @@ function JournalPage() {
         <button type="button" onClick={() => { setSearch(""); setSentimentFilter("all"); }}>
           Reset Filters
         </button>
+        <article className="card">Visible entries: {displayedEntries.length}</article>
         <article className="card">Average sentiment: {averageSentiment.toFixed(2)}</article>
       </div>
       <ul className="stack">
@@ -504,6 +536,11 @@ function NotesPage() {
     if (sortBy === "title") return a.title.localeCompare(b.title);
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
+  const uniqueTagCount = new Set(displayedNotes.flatMap((note) => note.tags)).size;
+  const exportFilteredNotesMarkdown = () => {
+    const content = displayedNotes.map((note) => `## ${note.title}\n\n${note.contentMarkdown}\n`).join("\n");
+    downloadContent(content, "life-os-notes-filtered.md", "text/markdown");
+  };
 
   const createTaskFromNote = (noteTitle: string, noteContent: string) => {
     actions.createTask({
@@ -538,6 +575,10 @@ function NotesPage() {
           <option value="oldest">Oldest</option>
           <option value="title">Title</option>
         </select>
+        <button type="button" onClick={exportFilteredNotesMarkdown} disabled={displayedNotes.length === 0}>
+          Export Filtered Markdown
+        </button>
+        <article className="card">Unique tags: {uniqueTagCount}</article>
       </div>
       <ul className="stack">
         {displayedNotes.map((note) => (
@@ -567,6 +608,10 @@ function TasksPage() {
   const [priorityFilter, setPriorityFilter] = useState<"all" | TaskPriority>("all");
   const [sortBy, setSortBy] = useState<"created_desc" | "due_asc" | "priority_desc">("created_desc");
   const [search, setSearch] = useState("");
+  const doneRate =
+    filteredTasks.length > 0
+      ? (filteredTasks.filter((task) => task.status === "done").length / filteredTasks.length) * 100
+      : 0;
   const now = Date.now();
   const filteredTasks = snapshot.tasks
     .filter((task) => (statusFilter === "all" ? true : task.status === statusFilter))
@@ -627,6 +672,11 @@ function TasksPage() {
     );
     downloadContent(["id,title,description,priority,status,dueDate", ...rows].join("\n"), "life-os-tasks-filtered.csv", "text/csv");
   };
+  const markFilteredInProgress = () => {
+    filteredTasks
+      .filter((task) => task.status === "todo" || task.status === "blocked")
+      .forEach((task) => actions.updateTaskStatus(task.id, "in_progress"));
+  };
 
   return (
     <section>
@@ -658,8 +708,14 @@ function TasksPage() {
         <button type="button" onClick={markFilteredDone} disabled={filteredTasks.length === 0}>
           Mark Filtered Done
         </button>
+        <button type="button" onClick={markFilteredInProgress} disabled={filteredTasks.length === 0}>
+          Set Filtered In Progress
+        </button>
         <button type="button" onClick={exportFilteredTasksCsv} disabled={filteredTasks.length === 0}>
           Export Filtered CSV
+        </button>
+        <button type="button" onClick={() => { setStatusFilter("all"); setPriorityFilter("all"); setSortBy("created_desc"); setSearch(""); }}>
+          Reset Filters
         </button>
       </div>
       <div className="cards">
@@ -674,6 +730,10 @@ function TasksPage() {
         <article className="card">
           <strong>Blocked</strong>
           <p>{blockedTasks.length}</p>
+        </article>
+        <article className="card">
+          <strong>Done Rate</strong>
+          <p>{doneRate.toFixed(1)}%</p>
         </article>
       </div>
       <form className="stack" onSubmit={onSubmit}>
@@ -762,6 +822,10 @@ function StoragePage() {
     0,
   );
   const averageMetricValue = totalMetrics > 0 ? totalMetricValue / totalMetrics : 0;
+  const multiMetricWorkbookCount = displayedWorkbooks.filter((workbook) => workbook.metrics.length >= 2).length;
+  const exportVisibleWorkbooksJson = () => {
+    downloadContent(JSON.stringify(displayedWorkbooks, null, 2), "life-os-workbooks-visible.json", "application/json");
+  };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -799,6 +863,10 @@ function StoragePage() {
         <article className="card">Visible workbooks: {displayedWorkbooks.length}</article>
         <article className="card">Metrics: {totalMetrics}</article>
         <article className="card">Avg metric value: {averageMetricValue.toFixed(2)}</article>
+        <article className="card">Workbooks with 2+ metrics: {multiMetricWorkbookCount}</article>
+        <button type="button" onClick={exportVisibleWorkbooksJson} disabled={displayedWorkbooks.length === 0}>
+          Export Visible Workbooks JSON
+        </button>
       </div>
       <ul className="stack">
         {displayedWorkbooks.map((workbook) => (
@@ -887,6 +955,14 @@ function CoachPage() {
     );
     setMessage("Life Moments CSV export created.");
   };
+  const exportNotificationsJson = () => {
+    downloadContent(JSON.stringify(notifications, null, 2), "life-os-notifications.json", "application/json");
+    setMessage("Notifications JSON export created.");
+  };
+  const exportLifeMomentsJson = () => {
+    downloadContent(JSON.stringify(lifeMoments, null, 2), "life-os-life-moments.json", "application/json");
+    setMessage("Life Moments JSON export created.");
+  };
   const visibleInsights = snapshot.insights.filter((insight) => {
     const moduleMatch = moduleFilter === "all" || insight.sourceModule === moduleFilter;
     const textMatch = !search.trim() || insight.content.toLowerCase().includes(search.trim().toLowerCase());
@@ -905,6 +981,9 @@ function CoachPage() {
         <button onClick={() => setReview(actions.generateReview("weekly"))}>Generate Weekly Review</button>
         <button onClick={exportReviewMarkdown}>Export Review Markdown</button>
         <button onClick={exportLifeMomentsCsv}>Export Life Moments CSV</button>
+        <button onClick={exportNotificationsJson}>Export Notifications JSON</button>
+        <button onClick={exportLifeMomentsJson}>Export Life Moments JSON</button>
+        <button onClick={() => setReview(null)}>Clear Review</button>
         <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value as typeof moduleFilter)}>
           <option value="all">All modules</option>
           <option value="journal">Journal</option>
@@ -959,7 +1038,14 @@ function CoachPage() {
 function SyncPage() {
   const { snapshot, actions } = useLifeOs();
   const [moduleFilter, setModuleFilter] = useState<"all" | "journal" | "notes" | "tasks" | "storage">("all");
-  const visibleQueue = snapshot.syncQueue.filter((operation) => moduleFilter === "all" || operation.module === moduleFilter);
+  const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
+  const visibleQueue = snapshot.syncQueue
+    .filter((operation) => moduleFilter === "all" || operation.module === moduleFilter)
+    .sort((a, b) =>
+      sortBy === "newest"
+        ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
   const exportFilteredQueue = () => {
     downloadContent(JSON.stringify(visibleQueue, null, 2), "life-os-sync-queue-filtered.json", "application/json");
   };
@@ -982,6 +1068,10 @@ function SyncPage() {
           <option value="tasks">Tasks</option>
           <option value="storage">Storage</option>
         </select>
+        <select value={sortBy} onChange={(event) => setSortBy(event.target.value as typeof sortBy)}>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </select>
         <button onClick={exportFilteredQueue} disabled={visibleQueue.length === 0}>
           Export Filtered Queue JSON
         </button>
@@ -991,6 +1081,8 @@ function SyncPage() {
         {visibleQueue.map((operation) => (
           <li key={operation.id} className="card">
             [{operation.module}] {operation.operation} {operation.entityId} at {operation.createdAt}
+            {" — "}
+            {Math.max(0, Math.floor((Date.now() - new Date(operation.createdAt).getTime()) / 60000))}m ago
           </li>
         ))}
       </ul>
@@ -1106,6 +1198,18 @@ function TimelinePage() {
   const exportFilteredTimelineJson = () => {
     downloadContent(JSON.stringify(filtered, null, 2), `life-os-timeline-${timelineView}.json`, "application/json");
   };
+  const exportTimelineSummaryMarkdown = () => {
+    const lines = [
+      `# Timeline Summary (${timelineView})`,
+      "",
+      `Filtered events: ${filtered.length}`,
+      `Date range: ${startDate || "start"} to ${endDate || "end"}`,
+      "",
+      "## Module Counts",
+      ...Object.entries(moduleCounts).map(([module, count]) => `- ${module}: ${count}`),
+    ];
+    downloadContent(lines.join("\n"), `life-os-timeline-summary-${timelineView}.md`, "text/markdown");
+  };
 
   return (
     <section>
@@ -1142,6 +1246,7 @@ function TimelinePage() {
         <article className="card">Distinct {timelineView} periods: {Object.keys(groupedCounts).length}</article>
         <button onClick={exportFilteredTimelineCsv}>Export Filtered Timeline CSV</button>
         <button onClick={exportFilteredTimelineJson}>Export Filtered Timeline JSON</button>
+        <button onClick={exportTimelineSummaryMarkdown}>Export Timeline Summary MD</button>
         <article className="card">Created: {eventTypeCounts.created ?? 0}</article>
         <article className="card">Updated: {eventTypeCounts.updated ?? 0}</article>
         <article className="card">Completed: {eventTypeCounts.completed ?? 0}</article>
@@ -1217,6 +1322,18 @@ function GraphPage() {
       "application/json",
     );
   };
+  const exportFilteredEdgesCsv = () => {
+    const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const rows = filteredEdges.map((edge) =>
+      [
+        edge.id,
+        escape(nodeLabelById[edge.source] ?? edge.source),
+        edge.relationship,
+        escape(nodeLabelById[edge.target] ?? edge.target),
+      ].join(","),
+    );
+    downloadContent(["id,source,relationship,target", ...rows].join("\n"), "life-os-graph-edges-filtered.csv", "text/csv");
+  };
 
   return (
     <section>
@@ -1239,6 +1356,7 @@ function GraphPage() {
         <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search node labels" />
         <input value={edgeSearch} onChange={(event) => setEdgeSearch(event.target.value)} placeholder="Search edges" />
         <button type="button" onClick={exportFilteredGraphJson}>Export Filtered Graph JSON</button>
+        <button type="button" onClick={exportFilteredEdgesCsv}>Export Filtered Edges CSV</button>
         <button type="button" onClick={() => { setNodeTypeFilter("all"); setRelationshipFilter("all"); setSearch(""); setEdgeSearch(""); }}>
           Reset Filters
         </button>
@@ -1512,7 +1630,7 @@ function ImportPage() {
 }
 
 function SettingsPage() {
-  const { actions } = useLifeOs();
+  const { actions, snapshot } = useLifeOs();
   const [noteSearch, setNoteSearch] = useState("");
   const [noteSearchResults, setNoteSearchResults] = useState<string[]>([]);
   const [openTaskCount, setOpenTaskCount] = useState<number | null>(null);
@@ -1528,15 +1646,29 @@ function SettingsPage() {
   const refreshRecentJournalTitles = async () => {
     setRecentJournalTitles(await actions.listRecentJournalTitles());
   };
+  const clearLocalPreferences = () => {
+    localStorage.removeItem("life-os-theme");
+    localStorage.removeItem("life-os-auth-email");
+    window.location.reload();
+  };
 
   return (
     <section>
       <h2>Settings</h2>
       <div className="stack">
         <p>Use dedicated routes for data tools:</p>
+        <button type="button" onClick={clearLocalPreferences}>
+          Clear Local Preferences
+        </button>
         <div className="cards">
           <Link to="/export">Open Export</Link>
           <Link to="/import">Open Import</Link>
+        </div>
+        <div className="cards">
+          <article className="card">State: journal {snapshot.journalEntries.length}</article>
+          <article className="card">State: notes {snapshot.notes.length}</article>
+          <article className="card">State: tasks {snapshot.tasks.length}</article>
+          <article className="card">State: workbooks {snapshot.workbooks.length}</article>
         </div>
         <form className="stack" onSubmit={runNoteSearch}>
           <input
