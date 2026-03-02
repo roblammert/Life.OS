@@ -13,6 +13,7 @@ function Layout() {
   const { snapshot, actions } = useLifeOs();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GlobalSearchResult[]>([]);
+  const [hasSearched, setHasSearched] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -74,6 +75,7 @@ function Layout() {
 
   const onSearch = async (event: FormEvent) => {
     event.preventDefault();
+    setHasSearched(true);
     setResults(await actions.searchGlobal(query));
   };
 
@@ -129,8 +131,11 @@ function Layout() {
       <form className="search-row" onSubmit={onSearch}>
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Global search across journal, notes, tasks, storage" />
         <button type="submit">Search</button>
-        <button type="button" onClick={() => { setQuery(""); setResults([]); }}>Clear</button>
+        <button type="button" onClick={() => { setQuery(""); setResults([]); setHasSearched(false); }}>Clear</button>
       </form>
+      <div className="cards">
+        <article className="card">Search results: {results.length}</article>
+      </div>
       {results.length > 0 ? (
         <ul className="stack">
           {results.map((result) => (
@@ -142,6 +147,7 @@ function Layout() {
           ))}
         </ul>
       ) : null}
+      {hasSearched && results.length === 0 ? <p>No matching records found.</p> : null}
 
       <nav className="nav">
         <Link to="/">Dashboard</Link>
@@ -299,6 +305,11 @@ function DashboardPage() {
     .filter((task) => task.dueDate && new Date(task.dueDate).getTime() < Date.now() && task.status !== "done")
     .sort((a, b) => new Date(a.dueDate ?? "").getTime() - new Date(b.dueDate ?? "").getTime())
     .slice(0, 3);
+  const recentCompletedTasks = snapshot.tasks
+    .filter((task) => task.status === "done")
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 3);
+  const highestActivityModule = Object.entries(moduleActivity).sort((a, b) => b[1] - a[1])[0] ?? null;
   const exportModuleActivityCsv = () => {
     const rows = Object.entries(moduleActivity).map(([module, count]) => `${module},${count}`);
     downloadContent(["module,count", ...rows].join("\n"), "life-os-module-activity.csv", "text/csv");
@@ -351,6 +362,9 @@ function DashboardPage() {
         <article className="card">Overdue Tasks: {overdueCount}</article>
         <article className="card">Due in 3 Days: {upcomingCount}</article>
         <article className="card">Completion Rate: {completionRate.toFixed(1)}%</article>
+        <article className="card">
+          Top active module: {highestActivityModule ? `${highestActivityModule[0]} (${highestActivityModule[1]})` : "n/a"}
+        </article>
       </div>
       <h3>Recent Journal Entries (DB query)</h3>
       <ul className="stack">
@@ -403,6 +417,14 @@ function DashboardPage() {
           </li>
         ))}
       </ul>
+      <h3>Recently Completed Tasks</h3>
+      <ul className="stack">
+        {recentCompletedTasks.map((task) => (
+          <li key={task.id} className="card">
+            {task.title}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -414,6 +436,7 @@ function JournalPage() {
   const [search, setSearch] = useState("");
   const [sentimentFilter, setSentimentFilter] = useState<"all" | "positive" | "neutral" | "negative">("all");
   const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
+  const [moodTagInput, setMoodTagInput] = useState("");
   const journalTemplates = [
     "What went well today?",
     "What challenged me today?",
@@ -462,6 +485,10 @@ function JournalPage() {
     displayedEntries.length > 0
       ? displayedEntries.reduce((acc, entry) => acc + entry.sentimentScore, 0) / displayedEntries.length
       : 0;
+  const totalVisibleWords = displayedEntries.reduce(
+    (acc, entry) => acc + entry.contentMarkdown.split(/\s+/).filter(Boolean).length,
+    0,
+  );
 
   return (
     <section>
@@ -475,6 +502,10 @@ function JournalPage() {
               Add Template
             </button>
           ))}
+          <input value={moodTagInput} onChange={(event) => setMoodTagInput(event.target.value)} placeholder="Mood tag (e.g. grateful)" />
+          <button type="button" onClick={() => setContent((current) => `${current}${current ? "\n\n" : ""}#${moodTagInput.trim().toLowerCase()}`)} disabled={!moodTagInput.trim()}>
+            Add Mood Tag
+          </button>
         </div>
         <button type="submit">Save Entry</button>
       </form>
@@ -504,6 +535,7 @@ function JournalPage() {
           Reset Filters
         </button>
         <article className="card">Visible entries: {displayedEntries.length}</article>
+        <article className="card">Visible words: {totalVisibleWords}</article>
         <article className="card">Average sentiment: {averageSentiment.toFixed(2)}</article>
       </div>
       <ul className="stack">
@@ -558,6 +590,14 @@ function NotesPage() {
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
   const uniqueTagCount = new Set(displayedNotes.flatMap((note) => note.tags)).size;
+  const topTags = Object.entries(
+    displayedNotes.flatMap((note) => note.tags).reduce<Record<string, number>>((acc, tag) => {
+      acc[tag] = (acc[tag] ?? 0) + 1;
+      return acc;
+    }, {}),
+  )
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
   const exportFilteredNotesMarkdown = () => {
     const content = displayedNotes.map((note) => `## ${note.title}\n\n${note.contentMarkdown}\n`).join("\n");
     downloadContent(content, "life-os-notes-filtered.md", "text/markdown");
@@ -612,12 +652,18 @@ function NotesPage() {
             <p>{note.contentMarkdown}</p>
             <p>Words: {note.contentMarkdown.split(/\s+/).filter(Boolean).length}</p>
             {note.tags.length > 0 ? <p>Tags: {note.tags.join(", ")}</p> : null}
+            <button type="button" onClick={() => void navigator.clipboard?.writeText(note.contentMarkdown)}>
+              Copy Content
+            </button>
             <button onClick={() => createTaskFromNote(note.title, note.contentMarkdown)}>
               Create Task from Note
             </button>
           </li>
         ))}
       </ul>
+      <article className="card">
+        Top tags: {topTags.map(([tag, count]) => `${tag} (${count})`).join(", ") || "none"}
+      </article>
     </section>
   );
 }
@@ -634,6 +680,7 @@ function TasksPage() {
   const [dueFilter, setDueFilter] = useState<"all" | "overdue" | "next7" | "no_due">("all");
   const [sortBy, setSortBy] = useState<"created_desc" | "due_asc" | "priority_desc">("created_desc");
   const [search, setSearch] = useState("");
+  const [quickTaskTitle, setQuickTaskTitle] = useState("");
   const now = Date.now();
   const next7Days = now + 7 * 24 * 60 * 60 * 1000;
   const filteredTasks = snapshot.tasks
@@ -715,6 +762,15 @@ function TasksPage() {
     const lines = filteredTasks.map((task) => `- [${task.status === "done" ? "x" : " "}] ${task.title} (${task.priority})`);
     downloadContent(["# Filtered Tasks", ...lines].join("\n"), "life-os-tasks-filtered.md", "text/markdown");
   };
+  const exportTasksByStatusJson = () => {
+    const payload = {
+      todo: filteredTasks.filter((task) => task.status === "todo"),
+      in_progress: filteredTasks.filter((task) => task.status === "in_progress"),
+      blocked: filteredTasks.filter((task) => task.status === "blocked"),
+      done: filteredTasks.filter((task) => task.status === "done"),
+    };
+    downloadContent(JSON.stringify(payload, null, 2), "life-os-tasks-by-status.json", "application/json");
+  };
   const markFilteredInProgress = () => {
     filteredTasks
       .filter((task) => task.status === "todo" || task.status === "blocked")
@@ -754,6 +810,9 @@ function TasksPage() {
           <option value="priority_desc">Priority</option>
         </select>
         <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tasks" />
+        <button type="button" onClick={() => setDueFilter("overdue")}>
+          Overdue Only
+        </button>
         <button type="button" onClick={markFilteredDone} disabled={filteredTasks.length === 0}>
           Mark Filtered Done
         </button>
@@ -765,6 +824,9 @@ function TasksPage() {
         </button>
         <button type="button" onClick={exportFilteredTasksMarkdown} disabled={filteredTasks.length === 0}>
           Export Filtered Markdown
+        </button>
+        <button type="button" onClick={exportTasksByStatusJson} disabled={filteredTasks.length === 0}>
+          Export By Status JSON
         </button>
         <button type="button" onClick={() => { setStatusFilter("all"); setPriorityFilter("all"); setDueFilter("all"); setSortBy("created_desc"); setSearch(""); }}>
           Reset Filters
@@ -802,6 +864,18 @@ function TasksPage() {
         </select>
         <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
         <button type="submit">Create Task</button>
+      </form>
+      <form
+        className="search-row"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!quickTaskTitle.trim()) return;
+          actions.createTask({ title: quickTaskTitle.trim(), description: "", priority: "medium" });
+          setQuickTaskTitle("");
+        }}
+      >
+        <input value={quickTaskTitle} onChange={(event) => setQuickTaskTitle(event.target.value)} placeholder="Quick add task..." />
+        <button type="submit">Quick Add</button>
       </form>
       {viewMode === "list" ? (
         <ul className="stack">
@@ -885,6 +959,14 @@ function StoragePage() {
   );
   const averageMetricValue = totalMetrics > 0 ? totalMetricValue / totalMetrics : 0;
   const multiMetricWorkbookCount = displayedWorkbooks.filter((workbook) => workbook.metrics.length >= 2).length;
+  const topMetricLabel = Object.entries(
+    displayedWorkbooks
+      .flatMap((workbook) => workbook.metrics.map((metric) => metric.label))
+      .reduce<Record<string, number>>((acc, label) => {
+        acc[label] = (acc[label] ?? 0) + 1;
+        return acc;
+      }, {}),
+  ).sort((a, b) => b[1] - a[1])[0];
   const exportVisibleWorkbooksJson = () => {
     downloadContent(JSON.stringify(displayedWorkbooks, null, 2), "life-os-workbooks-visible.json", "application/json");
   };
@@ -931,8 +1013,12 @@ function StoragePage() {
         <article className="card">Metrics: {totalMetrics}</article>
         <article className="card">Avg metric value: {averageMetricValue.toFixed(2)}</article>
         <article className="card">Workbooks with 2+ metrics: {multiMetricWorkbookCount}</article>
+        <article className="card">Top metric label: {topMetricLabel ? `${topMetricLabel[0]} (${topMetricLabel[1]})` : "n/a"}</article>
         <button type="button" onClick={exportVisibleWorkbooksJson} disabled={displayedWorkbooks.length === 0}>
           Export Visible Workbooks JSON
+        </button>
+        <button type="button" onClick={() => { setSearch(""); setMetricSearch(""); setSortBy("name_asc"); }}>
+          Reset Filters
         </button>
       </div>
       <ul className="stack">
@@ -1070,6 +1156,8 @@ function CoachPage() {
         <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search insights" />
         <input value={notificationSearch} onChange={(event) => setNotificationSearch(event.target.value)} placeholder="Search notifications" />
         <button onClick={exportVisibleInsightsJson}>Export Visible Insights JSON</button>
+        <button onClick={() => setMessage(null)}>Clear Message</button>
+        <article className="card">Visible insights: {visibleInsights.length}</article>
         <article className="card">Visible notifications: {visibleNotifications.length}</article>
       </div>
       {message ? <p>{message}</p> : null}
@@ -1127,6 +1215,16 @@ function SyncPage() {
   const exportFilteredQueue = () => {
     downloadContent(JSON.stringify(visibleQueue, null, 2), "life-os-sync-queue-filtered.json", "application/json");
   };
+  const oldestQueueAgeMinutes =
+    visibleQueue.length > 0
+      ? Math.max(
+          0,
+          Math.floor(
+            (Date.now() -
+              Math.min(...visibleQueue.map((operation) => new Date(operation.createdAt).getTime()))) / 60000,
+          ),
+        )
+      : 0;
   return (
     <section>
       <h2>Sync Status</h2>
@@ -1163,6 +1261,7 @@ function SyncPage() {
             {module}: {visibleQueue.filter((operation) => operation.module === module).length}
           </article>
         ))}
+        <article className="card">Oldest visible item age: {oldestQueueAgeMinutes}m</article>
       </div>
       <h3>Queue</h3>
       <ul className="stack">
@@ -1304,6 +1403,9 @@ function TimelinePage() {
     ];
     downloadContent(lines.join("\n"), `life-os-timeline-summary-${timelineView}.md`, "text/markdown");
   };
+  const exportBucketCountsJson = () => {
+    downloadContent(JSON.stringify(groupedCounts, null, 2), `life-os-timeline-buckets-${timelineView}.json`, "application/json");
+  };
 
   return (
     <section>
@@ -1338,6 +1440,9 @@ function TimelinePage() {
         <button type="button" onClick={() => { setModuleFilter("all"); setEventTypeFilter("all"); setTimelineView("daily"); setTextFilter(""); setSortDirection("newest"); setStartDate(""); setEndDate(""); }}>
           Reset Filters
         </button>
+        <button type="button" onClick={() => setTextFilter("")}>
+          Clear Text
+        </button>
       </div>
       <div className="cards">
         <article className="card">Filtered events: {filtered.length}</article>
@@ -1346,6 +1451,7 @@ function TimelinePage() {
         <button onClick={exportFilteredTimelineCsv}>Export Filtered Timeline CSV</button>
         <button onClick={exportFilteredTimelineJson}>Export Filtered Timeline JSON</button>
         <button onClick={exportTimelineSummaryMarkdown}>Export Timeline Summary MD</button>
+        <button onClick={exportBucketCountsJson}>Export Bucket Counts JSON</button>
         <article className="card">Created: {eventTypeCounts.created ?? 0}</article>
         <article className="card">Updated: {eventTypeCounts.updated ?? 0}</article>
         <article className="card">Completed: {eventTypeCounts.completed ?? 0}</article>
@@ -1439,11 +1545,16 @@ function GraphPage() {
     const rows = visibleNodes.map((node) => `${node.id},"${node.label.replaceAll('"', '""')}",${node.type}`);
     downloadContent(["id,label,type", ...rows].join("\n"), "life-os-graph-visible-nodes.csv", "text/csv");
   };
+  const relationshipTotal = filteredEdges.length || 1;
+  const primaryRelationship = Object.entries(edgeClusters).sort((a, b) => b[1] - a[1])[0];
 
   return (
     <section>
       <h2>Life Graph</h2>
       <p>Nodes: {visibleNodes.length} | Edges: {filteredEdges.length} | Isolated nodes: {isolatedNodeCount}</p>
+      <article className="card">
+        Top relationship ratio: {primaryRelationship ? `${primaryRelationship[0]} ${(primaryRelationship[1] / relationshipTotal * 100).toFixed(1)}%` : "n/a"}
+      </article>
       <div className="cards">
         <select value={nodeTypeFilter} onChange={(event) => setNodeTypeFilter(event.target.value as typeof nodeTypeFilter)}>
           <option value="all">All node types</option>
@@ -1781,6 +1892,12 @@ function SettingsPage() {
     };
     downloadContent(JSON.stringify(payload, null, 2), "life-os-state-stats.json", "application/json");
   };
+  const clearCachedSearch = () => {
+    setNoteSearch("");
+    setNoteSearchResults([]);
+    sessionStorage.removeItem("life-os-search-cache");
+    localStorage.removeItem("life-os-search-cache");
+  };
 
   return (
     <section>
@@ -1792,6 +1909,9 @@ function SettingsPage() {
         </button>
         <button type="button" onClick={exportStateStatsJson}>
           Export State Stats JSON
+        </button>
+        <button type="button" onClick={clearCachedSearch}>
+          Clear Cached Search
         </button>
         <div className="cards">
           <Link to="/export">Open Export</Link>
