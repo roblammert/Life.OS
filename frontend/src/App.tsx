@@ -373,6 +373,11 @@ function JournalPage() {
           <li key={entry.id} className="card">
             <strong>{entry.title}</strong>
             <p>{entry.contentMarkdown}</p>
+            <p>Words: {entry.contentMarkdown.split(/\s+/).filter(Boolean).length}</p>
+            <p>
+              Sentiment: {entry.sentimentScore.toFixed(2)}{" "}
+              ({entry.sentimentScore > 0.15 ? "positive" : entry.sentimentScore < -0.15 ? "negative" : "neutral"})
+            </p>
           </li>
         ))}
       </ul>

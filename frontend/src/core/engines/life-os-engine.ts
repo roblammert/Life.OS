@@ -74,7 +74,7 @@ export class LifeOsEngine {
       title: input.title,
       contentMarkdown: input.contentMarkdown,
       moodTags: [],
-      sentimentScore: 0,
+      sentimentScore: this.estimateSentimentScore(input.contentMarkdown),
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
@@ -346,6 +346,20 @@ export class LifeOsEngine {
   private escapeCsv(value: string): string {
     const escaped = value.replaceAll('"', '""');
     return `"${escaped}"`;
+  }
+
+  private estimateSentimentScore(content: string): number {
+    const positiveWords = ["good", "great", "calm", "happy", "progress", "win", "grateful", "better"];
+    const negativeWords = ["bad", "sad", "angry", "stress", "anxious", "tired", "stuck", "overwhelmed"];
+    const tokens = content.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+    let score = 0;
+    for (const token of tokens) {
+      if (positiveWords.includes(token)) score += 1;
+      if (negativeWords.includes(token)) score -= 1;
+    }
+    if (tokens.length === 0) return 0;
+    const normalized = score / Math.max(1, Math.min(tokens.length, 20));
+    return Math.max(-1, Math.min(1, normalized));
   }
 }
 
