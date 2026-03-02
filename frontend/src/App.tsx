@@ -245,19 +245,40 @@ function CoachPage() {
       <h2>Life.Coach Insights</h2>
       <ul className="stack">
         {snapshot.insights.map((insight) => (
-          <li key={insight.id} className="card">
-            <strong>{insight.sourceModule}</strong>: {insight.content}
-            {insight.actions.length > 0 ? (
-              <ul>
-                {insight.actions.map((action) => (
-                  <li key={action}>{action}</li>
-                ))}
-              </ul>
-            ) : null}
-          </li>
+          <InsightCard key={insight.id} insight={insight} />
         ))}
       </ul>
     </section>
+  );
+}
+
+function InsightCard({ insight }: { insight: ReturnType<typeof useLifeOs>["snapshot"]["insights"][number] }) {
+  const moduleLabels: Record<string, string> = {
+    journal: "Life.Journal",
+    notes: "Life.Notes",
+    tasks: "Life.Assistant",
+    storage: "Life.Storage",
+  };
+  return (
+    <li className="card">
+      <p>
+        <strong>{moduleLabels[insight.sourceModule] ?? insight.sourceModule}</strong>
+      </p>
+      <p>{insight.content}</p>
+      {insight.actions.length > 0 ? (
+        <ul>
+          {insight.actions.map((action) => (
+            <li key={action}>{action}</li>
+          ))}
+        </ul>
+      ) : null}
+      {insight.promptUsed ? (
+        <details>
+          <summary>Prompt</summary>
+          <pre>{insight.promptUsed}</pre>
+        </details>
+      ) : null}
+    </li>
   );
 }
 
