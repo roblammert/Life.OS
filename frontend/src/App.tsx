@@ -1673,7 +1673,7 @@ function SyncPage() {
         <article className="card">Newest visible item age: {newestQueueAgeMinutes}m</article>
         <article className="card">Oldest visible item age: {(oldestQueueAgeMinutes / 60).toFixed(1)}h</article>
         <article className="card">Total queue age: {totalQueueAgeHours.toFixed(1)}h</article>
-        <article className="card">Stale >24h: {staleOver24Hours}</article>
+        <article className="card">Stale {"\u003e"}24h: {staleOver24Hours}</article>
       </div>
       <h3>Queue</h3>
       <ul className="stack">
