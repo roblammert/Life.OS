@@ -27,6 +27,8 @@ function Layout() {
     if (saved === "light" || saved === "high-contrast" || saved === "dark") return saved;
     return "dark";
   });
+  const [authEmail, setAuthEmail] = useState(() => localStorage.getItem("life-os-auth-email") ?? "");
+  const isAuthenticated = authEmail.trim().length > 0;
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -50,6 +52,14 @@ function Layout() {
   useEffect(() => {
     localStorage.setItem("life-os-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      localStorage.setItem("life-os-auth-email", authEmail);
+    } else {
+      localStorage.removeItem("life-os-auth-email");
+    }
+  }, [authEmail, isAuthenticated]);
 
   useEffect(() => {
     const onResize = () => {
@@ -84,11 +94,13 @@ function Layout() {
         </button>
         <span>Pending sync ops: {snapshot.syncQueue.length}</span>
         <span>Layout: {layoutMode}</span>
+        <span>Auth: {isAuthenticated ? authEmail : "guest"}</span>
         <span className={isOnline ? "status-online" : "status-offline"}>{isOnline ? "Online" : "Offline"}</span>
         {installPrompt ? <button onClick={() => void onInstall()}>Install App</button> : null}
         <button onClick={() => setNotificationOpen((current) => !current)}>
           Notifications ({actions.generateNotifications().length})
         </button>
+        {isAuthenticated ? <button onClick={() => setAuthEmail("")}>Logout</button> : null}
         <select value={theme} onChange={(event) => setTheme(event.target.value as typeof theme)}>
           <option value="dark">Dark</option>
           <option value="light">Light</option>
@@ -132,6 +144,8 @@ function Layout() {
         <Link to="/coach">Coach</Link>
         <Link to="/timeline">Timeline</Link>
         <Link to="/graph">Graph</Link>
+        <Link to="/auth/login">Login</Link>
+        <Link to="/auth/register">Register</Link>
         <Link to="/export">Export</Link>
         <Link to="/import">Import</Link>
         <Link to="/settings">Settings</Link>
@@ -147,6 +161,9 @@ function Layout() {
           <Route path="/coach" element={<CoachPage />} />
           <Route path="/timeline" element={<TimelinePage />} />
           <Route path="/graph" element={<GraphPage />} />
+          <Route path="/auth/login" element={<AuthLoginPage onLogin={setAuthEmail} />} />
+          <Route path="/auth/register" element={<AuthRegisterPage onRegister={setAuthEmail} />} />
+          <Route path="/auth/reset" element={<AuthResetPage />} />
           <Route path="/export" element={<ExportPage />} />
           <Route path="/import" element={<ImportPage />} />
           <Route path="/settings" element={<SettingsPage />} />
@@ -154,6 +171,85 @@ function Layout() {
         </Routes>
       </main>
     </div>
+  );
+}
+
+function AuthLoginPage({ onLogin }: { onLogin: (email: string) => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [done, setDone] = useState(false);
+
+  const onSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!email.trim() || !password.trim()) return;
+    onLogin(email.trim());
+    setDone(true);
+  };
+
+  return (
+    <section>
+      <h2>Login</h2>
+      <form className="stack" onSubmit={onSubmit}>
+        <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" />
+        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" />
+        <button type="submit">Login</button>
+      </form>
+      <div className="cards">
+        <Link to="/auth/register">Create account</Link>
+        <Link to="/auth/reset">Reset password</Link>
+      </div>
+      {done ? <p>Logged in locally.</p> : null}
+    </section>
+  );
+}
+
+function AuthRegisterPage({ onRegister }: { onRegister: (email: string) => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [done, setDone] = useState(false);
+
+  const onSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!email.trim() || !password.trim()) return;
+    onRegister(email.trim());
+    setDone(true);
+  };
+
+  return (
+    <section>
+      <h2>Register</h2>
+      <form className="stack" onSubmit={onSubmit}>
+        <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" />
+        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" />
+        <button type="submit">Create Account</button>
+      </form>
+      <div className="cards">
+        <Link to="/auth/login">Already have an account?</Link>
+      </div>
+      {done ? <p>Account created locally and signed in.</p> : null}
+    </section>
+  );
+}
+
+function AuthResetPage() {
+  const [email, setEmail] = useState("");
+  const [done, setDone] = useState(false);
+
+  const onSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!email.trim()) return;
+    setDone(true);
+  };
+
+  return (
+    <section>
+      <h2>Password Reset</h2>
+      <form className="stack" onSubmit={onSubmit}>
+        <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" />
+        <button type="submit">Send Reset Link</button>
+      </form>
+      {done ? <p>Reset instruction queued locally.</p> : null}
+    </section>
   );
 }
 
