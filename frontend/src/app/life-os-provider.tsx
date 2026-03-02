@@ -1,7 +1,7 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { LifeOsEngine, type PersistedLifeOsState } from "../core/engines/life-os-engine";
 import type { TaskPriority } from "../core/types";
-import { IndexedDbGateway } from "../lib/db/indexeddb";
+import { type GlobalSearchResult, IndexedDbGateway } from "../lib/db/indexeddb";
 
 interface LifeOsContextValue {
   snapshot: ReturnType<LifeOsEngine["getSnapshot"]>;
@@ -17,6 +17,7 @@ interface LifeOsContextValue {
     listOpenTasks: () => Promise<number>;
     listRecentJournalTitles: () => Promise<string[]>;
     searchNoteTitles: (query: string) => Promise<string[]>;
+    searchGlobal: (query: string) => Promise<GlobalSearchResult[]>;
   };
 }
 
@@ -101,6 +102,7 @@ export function LifeOsProvider({ children }: { children: ReactNode }) {
           const notes = await dbRef.current.searchNotes(query);
           return notes.map((note) => note.title);
         },
+        searchGlobal: async (query) => dbRef.current.searchAllModules(query),
       },
     }),
     [snapshot],

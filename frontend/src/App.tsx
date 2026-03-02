@@ -2,9 +2,17 @@ import { FormEvent, useEffect, useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { LifeOsProvider, useLifeOs } from "./app/life-os-provider";
 import type { TaskPriority } from "./core/types";
+import type { GlobalSearchResult } from "./lib/db/indexeddb";
 
 function Layout() {
   const { snapshot, actions } = useLifeOs();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<GlobalSearchResult[]>([]);
+
+  const onSearch = async (event: FormEvent) => {
+    event.preventDefault();
+    setResults(await actions.searchGlobal(query));
+  };
 
   return (
     <div className="app-shell">
@@ -16,6 +24,20 @@ function Layout() {
         </button>
         <span>Pending sync ops: {snapshot.syncQueue.length}</span>
       </header>
+      <form className="search-row" onSubmit={onSearch}>
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Global search across journal, notes, tasks, storage" />
+        <button type="submit">Search</button>
+      </form>
+      {results.length > 0 ? (
+        <ul className="stack">
+          {results.map((result) => (
+            <li key={result.id} className="card">
+              <strong>{result.module}</strong> — {result.label}
+              <p>{result.preview}</p>
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       <nav className="nav">
         <Link to="/">Dashboard</Link>
@@ -284,11 +306,38 @@ function InsightCard({ insight }: { insight: ReturnType<typeof useLifeOs>["snaps
 
 function TimelinePage() {
   const { snapshot } = useLifeOs();
+  const [moduleFilter, setModuleFilter] = useState<"all" | "journal" | "notes" | "tasks" | "storage">("all");
+  const [eventTypeFilter, setEventTypeFilter] = useState<"all" | "created" | "updated" | "completed">("all");
+  const [textFilter, setTextFilter] = useState("");
+
+  const filtered = snapshot.timeline.filter((event) => {
+    const moduleMatch = moduleFilter === "all" || event.module === moduleFilter;
+    const typeMatch = eventTypeFilter === "all" || event.eventType === eventTypeFilter;
+    const textMatch = textFilter.trim() === "" || event.title.toLowerCase().includes(textFilter.toLowerCase());
+    return moduleMatch && typeMatch && textMatch;
+  });
+
   return (
     <section>
       <h2>Timeline</h2>
+      <div className="cards">
+        <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value as typeof moduleFilter)}>
+          <option value="all">All modules</option>
+          <option value="journal">Journal</option>
+          <option value="notes">Notes</option>
+          <option value="tasks">Tasks</option>
+          <option value="storage">Storage</option>
+        </select>
+        <select value={eventTypeFilter} onChange={(event) => setEventTypeFilter(event.target.value as typeof eventTypeFilter)}>
+          <option value="all">All event types</option>
+          <option value="created">Created</option>
+          <option value="updated">Updated</option>
+          <option value="completed">Completed</option>
+        </select>
+        <input value={textFilter} onChange={(event) => setTextFilter(event.target.value)} placeholder="Filter by text" />
+      </div>
       <ul className="stack">
-        {snapshot.timeline.map((event) => (
+        {filtered.map((event) => (
           <li key={event.id} className="card">
             {event.timestamp} — {event.title}
           </li>
@@ -300,12 +349,30 @@ function TimelinePage() {
 
 function GraphPage() {
   const { snapshot } = useLifeOs();
+  const [nodeTypeFilter, setNodeTypeFilter] = useState<"all" | "entry" | "note" | "task" | "metric">("all");
+  const [search, setSearch] = useState("");
+  const filteredNodes = snapshot.graphNodes.filter((node) => {
+    const typeMatch = nodeTypeFilter === "all" || node.type === nodeTypeFilter;
+    const textMatch = search.trim() === "" || node.label.toLowerCase().includes(search.toLowerCase());
+    return typeMatch && textMatch;
+  });
+
   return (
     <section>
       <h2>Life Graph</h2>
-      <p>Nodes: {snapshot.graphNodes.length} | Edges: {snapshot.graphEdges.length}</p>
+      <p>Nodes: {filteredNodes.length} | Edges: {snapshot.graphEdges.length}</p>
+      <div className="cards">
+        <select value={nodeTypeFilter} onChange={(event) => setNodeTypeFilter(event.target.value as typeof nodeTypeFilter)}>
+          <option value="all">All node types</option>
+          <option value="entry">Entry</option>
+          <option value="note">Note</option>
+          <option value="task">Task</option>
+          <option value="metric">Metric</option>
+        </select>
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search node labels" />
+      </div>
       <ul className="stack">
-        {snapshot.graphNodes.map((node) => (
+        {filteredNodes.map((node) => (
           <li key={node.id} className="card">
             [{node.type}] {node.label}
           </li>

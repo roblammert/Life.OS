@@ -5,6 +5,7 @@ import type {
   JournalEntry,
   LifeGraphEdge,
   LifeGraphNode,
+  ModuleName,
   NoteItem,
   TaskItem,
   TimelineEvent,
@@ -16,6 +17,13 @@ interface MetadataRecord {
   id: "app";
   lastSyncedAt?: string;
   updatedAt: string;
+}
+
+export interface GlobalSearchResult {
+  id: string;
+  module: ModuleName;
+  label: string;
+  preview: string;
 }
 
 export class IndexedDbGateway extends Dexie {
@@ -174,6 +182,40 @@ export class IndexedDbGateway extends Dexie {
           note.contentMarkdown.toLowerCase().includes(normalized),
       )
       .toArray();
+  }
+
+  async searchAllModules(query: string): Promise<GlobalSearchResult[]> {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return [];
+    const [journal, notes, tasks, workbooks] = await Promise.all([
+      this.journalEntries.toArray(),
+      this.notes.toArray(),
+      this.tasks.toArray(),
+      this.workbooks.toArray(),
+    ]);
+
+    const results: GlobalSearchResult[] = [];
+    for (const item of journal) {
+      if (item.title.toLowerCase().includes(normalized) || item.contentMarkdown.toLowerCase().includes(normalized)) {
+        results.push({ id: item.id, module: "journal", label: item.title, preview: item.contentMarkdown.slice(0, 120) });
+      }
+    }
+    for (const item of notes) {
+      if (item.title.toLowerCase().includes(normalized) || item.contentMarkdown.toLowerCase().includes(normalized)) {
+        results.push({ id: item.id, module: "notes", label: item.title, preview: item.contentMarkdown.slice(0, 120) });
+      }
+    }
+    for (const item of tasks) {
+      if (item.title.toLowerCase().includes(normalized) || item.description.toLowerCase().includes(normalized)) {
+        results.push({ id: item.id, module: "tasks", label: item.title, preview: item.description.slice(0, 120) });
+      }
+    }
+    for (const item of workbooks) {
+      if (item.name.toLowerCase().includes(normalized)) {
+        results.push({ id: item.id, module: "storage", label: item.name, preview: item.metrics.map((m) => `${m.label}:${m.value}`).join(", ").slice(0, 120) });
+      }
+    }
+    return results.slice(0, 20);
   }
 }
 
