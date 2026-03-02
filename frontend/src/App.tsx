@@ -12,8 +12,26 @@ interface BeforeInstallPromptEvent extends Event {
 function Layout() {
   const { snapshot, actions } = useLifeOs();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<GlobalSearchResult[]>([]);
-  const [hasSearched, setHasSearched] = useState(false);
+  const [results, setResults] = useState<GlobalSearchResult[]>(() => {
+    const cached = sessionStorage.getItem("life-os-search-cache");
+    if (!cached) return [];
+    try {
+      const parsed = JSON.parse(cached) as { results?: GlobalSearchResult[] };
+      return parsed.results ?? [];
+    } catch {
+      return [];
+    }
+  });
+  const [hasSearched, setHasSearched] = useState(() => {
+    const cached = sessionStorage.getItem("life-os-search-cache");
+    if (!cached) return false;
+    try {
+      const parsed = JSON.parse(cached) as { hasSearched?: boolean };
+      return Boolean(parsed.hasSearched);
+    } catch {
+      return false;
+    }
+  });
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -72,6 +90,10 @@ function Layout() {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  useEffect(() => {
+    sessionStorage.setItem("life-os-search-cache", JSON.stringify({ query, results, hasSearched }));
+  }, [query, results, hasSearched]);
 
   const onSearch = async (event: FormEvent) => {
     event.preventDefault();
@@ -329,6 +351,11 @@ function DashboardPage() {
       return acc;
     }, {}),
   ).sort((a, b) => b[1] - a[1])[0] ?? null;
+  const averageTaskAgeDays =
+    snapshot.tasks.length > 0
+      ? snapshot.tasks.reduce((acc, task) => acc + (Date.now() - new Date(task.createdAt).getTime()) / 86400000, 0) /
+        snapshot.tasks.length
+      : 0;
   const exportModuleActivityCsv = () => {
     const rows = Object.entries(moduleActivity).map(([module, count]) => `${module},${count}`);
     downloadContent(["module,count", ...rows].join("\n"), "life-os-module-activity.csv", "text/csv");
@@ -412,6 +439,7 @@ function DashboardPage() {
         <article className="card">
           Top pending sync module: {pendingSyncByModule ? `${pendingSyncByModule[0]} (${pendingSyncByModule[1]})` : "n/a"}
         </article>
+        <article className="card">Avg task age: {averageTaskAgeDays.toFixed(1)} days</article>
         <button type="button" onClick={exportSnapshotSummaryJson}>Export Snapshot Summary JSON</button>
         <button type="button" onClick={exportUpcomingTasksCsv} disabled={upcomingTasks.length === 0}>
           Export Upcoming Tasks CSV
@@ -512,6 +540,13 @@ function JournalPage() {
   const exportVisibleTitlesTxt = () => {
     downloadContent(displayedEntries.map((entry) => entry.title).join("\n"), "life-os-journal-titles.txt", "text/plain");
   };
+  const exportSentimentSummaryJson = () => {
+    downloadContent(
+      JSON.stringify({ averageSentiment, sentimentDistribution, visibleEntries: displayedEntries.length }, null, 2),
+      "life-os-journal-sentiment-summary.json",
+      "application/json",
+    );
+  };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -547,6 +582,7 @@ function JournalPage() {
     (acc, entry) => acc + entry.contentMarkdown.split(/\s+/).filter(Boolean).length,
     0,
   );
+  const estimatedReadMinutes = totalVisibleWords / 200;
   const sentimentDistribution = displayedEntries.reduce(
     (acc, entry) => {
       if (entry.sentimentScore > 0.15) acc.positive += 1;
@@ -611,6 +647,9 @@ function JournalPage() {
         <button type="button" onClick={exportVisibleTitlesTxt} disabled={displayedEntries.length === 0}>
           Export Visible Titles TXT
         </button>
+        <button type="button" onClick={exportSentimentSummaryJson} disabled={displayedEntries.length === 0}>
+          Export Sentiment Summary JSON
+        </button>
         <button type="button" onClick={() => { setSearch(""); setSentimentFilter("all"); }}>
           Reset Filters
         </button>
@@ -619,6 +658,7 @@ function JournalPage() {
         </button>
         <article className="card">Visible entries: {displayedEntries.length}</article>
         <article className="card">Visible words: {totalVisibleWords}</article>
+        <article className="card">Estimated read time: {estimatedReadMinutes.toFixed(1)} min</article>
         <article className="card">Average sentiment: {averageSentiment.toFixed(2)}</article>
         <article className="card">
           Sentiment + / ~ / - : {sentimentDistribution.positive} / {sentimentDistribution.neutral} / {sentimentDistribution.negative}
@@ -648,7 +688,7 @@ function NotesPage() {
   const [tagsInput, setTagsInput] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "title">("newest");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "title" | "words_desc">("newest");
   const [previewMode, setPreviewMode] = useState(false);
   const [quickTag, setQuickTag] = useState("");
 
@@ -675,6 +715,9 @@ function NotesPage() {
   }).sort((a, b) => {
     if (sortBy === "oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     if (sortBy === "title") return a.title.localeCompare(b.title);
+    if (sortBy === "words_desc") {
+      return b.contentMarkdown.split(/\s+/).filter(Boolean).length - a.contentMarkdown.split(/\s+/).filter(Boolean).length;
+    }
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
   const uniqueTagCount = new Set(displayedNotes.flatMap((note) => note.tags)).size;
@@ -693,6 +736,9 @@ function NotesPage() {
   };
   const exportFilteredNotesJson = () => {
     downloadContent(JSON.stringify(displayedNotes, null, 2), "life-os-notes-filtered.json", "application/json");
+  };
+  const exportTagCountsJson = () => {
+    downloadContent(JSON.stringify(Object.fromEntries(topTags), null, 2), "life-os-notes-tag-counts.json", "application/json");
   };
 
   const createTaskFromNote = (noteTitle: string, noteContent: string) => {
@@ -727,12 +773,16 @@ function NotesPage() {
           <option value="newest">Newest</option>
           <option value="oldest">Oldest</option>
           <option value="title">Title</option>
+          <option value="words_desc">Word count</option>
         </select>
         <button type="button" onClick={exportFilteredNotesMarkdown} disabled={displayedNotes.length === 0}>
           Export Filtered Markdown
         </button>
         <button type="button" onClick={exportFilteredNotesJson} disabled={displayedNotes.length === 0}>
           Export Visible JSON
+        </button>
+        <button type="button" onClick={exportTagCountsJson} disabled={topTags.length === 0}>
+          Export Tag Counts JSON
         </button>
         <button type="button" onClick={() => setPreviewMode((current) => !current)}>
           {previewMode ? "Hide Preview" : "Show Preview"}
@@ -899,6 +949,9 @@ function TasksPage() {
   const exportVisibleTitlesTxt = () => {
     downloadContent(filteredTasks.map((task) => task.title).join("\n"), "life-os-tasks-titles.txt", "text/plain");
   };
+  const exportStatusSnapshotJson = () => {
+    downloadContent(JSON.stringify({ counts: filteredPriorityCounts, total: filteredTasks.length }, null, 2), "life-os-tasks-status-snapshot.json", "application/json");
+  };
   const markFilteredInProgress = () => {
     filteredTasks
       .filter((task) => task.status === "todo" || task.status === "blocked")
@@ -959,6 +1012,9 @@ function TasksPage() {
         <button type="button" onClick={exportVisibleTitlesTxt} disabled={filteredTasks.length === 0}>
           Export Titles TXT
         </button>
+        <button type="button" onClick={exportStatusSnapshotJson} disabled={filteredTasks.length === 0}>
+          Export Status Snapshot JSON
+        </button>
         <button type="button" onClick={() => { setStatusFilter("all"); setPriorityFilter("all"); setDueFilter("all"); setSortBy("created_desc"); setSearch(""); }}>
           Reset Filters
         </button>
@@ -1007,6 +1063,9 @@ function TasksPage() {
         </select>
         <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
         <button type="submit">Create Task</button>
+        <button type="button" onClick={() => { setTitle(""); setDescription(""); setPriority("medium"); setDueDate(""); }}>
+          Reset Form
+        </button>
       </form>
       <form
         className="search-row"
@@ -1146,6 +1205,15 @@ function StoragePage() {
   const exportVisibleWorkbookNamesTxt = () => {
     downloadContent(displayedWorkbooks.map((workbook) => workbook.name).join("\n"), "life-os-workbook-names.txt", "text/plain");
   };
+  const exportMetricLabelCountsJson = () => {
+    const counts = displayedWorkbooks
+      .flatMap((workbook) => workbook.metrics.map((metric) => metric.label))
+      .reduce<Record<string, number>>((acc, label) => {
+        acc[label] = (acc[label] ?? 0) + 1;
+        return acc;
+      }, {});
+    downloadContent(JSON.stringify(counts, null, 2), "life-os-storage-metric-label-counts.json", "application/json");
+  };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -1204,6 +1272,16 @@ function StoragePage() {
         <button type="button" onClick={exportVisibleWorkbookNamesTxt} disabled={displayedWorkbooks.length === 0}>
           Export Workbook Names TXT
         </button>
+        <button type="button" onClick={exportMetricLabelCountsJson} disabled={displayedWorkbooks.length === 0}>
+          Export Metric Label Counts JSON
+        </button>
+        <button
+          type="button"
+          onClick={() => void navigator.clipboard?.writeText(displayedWorkbooks.map((workbook) => workbook.name).join("\n"))}
+          disabled={displayedWorkbooks.length === 0}
+        >
+          Copy Workbook Names
+        </button>
         <button type="button" onClick={() => { setSearch(""); setMetricSearch(""); setSortBy("name_asc"); }}>
           Reset Filters
         </button>
@@ -1256,6 +1334,7 @@ function CoachPage() {
   const [lifeMoments, setLifeMoments] = useState<ReturnType<typeof actions.generateLifeMoments>>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [moduleFilter, setModuleFilter] = useState<"all" | "journal" | "notes" | "tasks" | "storage">("all");
+  const [insightTypeFilter, setInsightTypeFilter] = useState<"all" | "summary" | "pattern" | "suggestion">("all");
   const [search, setSearch] = useState("");
   const [notificationSearch, setNotificationSearch] = useState("");
   const [lifeMomentSearch, setLifeMomentSearch] = useState("");
@@ -1315,8 +1394,9 @@ function CoachPage() {
   };
   const visibleInsights = snapshot.insights.filter((insight) => {
     const moduleMatch = moduleFilter === "all" || insight.sourceModule === moduleFilter;
+    const typeMatch = insightTypeFilter === "all" || insight.insightType === insightTypeFilter;
     const textMatch = !search.trim() || insight.content.toLowerCase().includes(search.trim().toLowerCase());
-    return moduleMatch && textMatch;
+    return moduleMatch && typeMatch && textMatch;
   });
   const exportVisibleInsightsJson = () => {
     downloadContent(JSON.stringify(visibleInsights, null, 2), "life-os-visible-insights.json", "application/json");
@@ -1343,6 +1423,10 @@ function CoachPage() {
     downloadContent(["id,module,type,content", ...rows].join("\n"), "life-os-insights-visible.csv", "text/csv");
     setMessage("Visible insights CSV export created.");
   };
+  const exportVisibleLifeMomentsJson = () => {
+    downloadContent(JSON.stringify(visibleLifeMoments, null, 2), "life-os-life-moments-visible.json", "application/json");
+    setMessage("Visible life moments JSON export created.");
+  };
 
   return (
     <section>
@@ -1362,12 +1446,19 @@ function CoachPage() {
           <option value="tasks">Tasks</option>
           <option value="storage">Storage</option>
         </select>
+        <select value={insightTypeFilter} onChange={(event) => setInsightTypeFilter(event.target.value as typeof insightTypeFilter)}>
+          <option value="all">All insight types</option>
+          <option value="summary">summary</option>
+          <option value="pattern">pattern</option>
+          <option value="suggestion">suggestion</option>
+        </select>
         <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search insights" />
         <input value={notificationSearch} onChange={(event) => setNotificationSearch(event.target.value)} placeholder="Search notifications" />
         <input value={lifeMomentSearch} onChange={(event) => setLifeMomentSearch(event.target.value)} placeholder="Search life moments" />
         <button onClick={exportVisibleInsightsJson}>Export Visible Insights JSON</button>
         <button onClick={exportVisibleInsightsCsv}>Export Visible Insights CSV</button>
         <button onClick={exportVisibleNotificationsCsv}>Export Visible Notifications CSV</button>
+        <button onClick={exportVisibleLifeMomentsJson}>Export Visible Life Moments JSON</button>
         <button onClick={() => setMessage(null)}>Clear Message</button>
         <article className="card">Visible insights: {visibleInsights.length}</article>
         <article className="card">Visible notifications: {visibleNotifications.length}</article>
@@ -1455,6 +1546,13 @@ function SyncPage() {
     }, {});
     downloadContent(JSON.stringify(payload, null, 2), "life-os-sync-module-counts.json", "application/json");
   };
+  const copyVisibleQueue = () => {
+    void navigator.clipboard?.writeText(JSON.stringify(visibleQueue, null, 2));
+  };
+  const totalQueueAgeHours =
+    visibleQueue.length > 0
+      ? visibleQueue.reduce((acc, operation) => acc + (Date.now() - new Date(operation.createdAt).getTime()) / 3600000, 0)
+      : 0;
   return (
     <section>
       <h2>Sync Status</h2>
@@ -1484,6 +1582,9 @@ function SyncPage() {
         <button onClick={exportModuleCountsJson} disabled={visibleQueue.length === 0}>
           Export Module Counts JSON
         </button>
+        <button onClick={copyVisibleQueue} disabled={visibleQueue.length === 0}>
+          Copy Visible Queue
+        </button>
         <button type="button" onClick={() => { setModuleFilter("all"); setSortBy("newest"); }}>
           Reset Filters
         </button>
@@ -1497,6 +1598,7 @@ function SyncPage() {
         <article className="card">Oldest visible item age: {oldestQueueAgeMinutes}m</article>
         <article className="card">Newest visible item age: {newestQueueAgeMinutes}m</article>
         <article className="card">Oldest visible item age: {(oldestQueueAgeMinutes / 60).toFixed(1)}h</article>
+        <article className="card">Total queue age: {totalQueueAgeHours.toFixed(1)}h</article>
       </div>
       <h3>Queue</h3>
       <ul className="stack">
@@ -1647,10 +1749,18 @@ function TimelinePage() {
   const exportVisibleTitlesTxt = () => {
     downloadContent(sortedFiltered.map((event) => event.title).join("\n"), `life-os-timeline-titles-${timelineView}.txt`, "text/plain");
   };
+  const exportTopBucketsTxt = () => {
+    downloadContent(topBuckets.map(([bucket, count]) => `${bucket}: ${count}`).join("\n"), `life-os-timeline-top-buckets-${timelineView}.txt`, "text/plain");
+  };
   const visibleRangeSummary =
     sortedFiltered.length > 0
       ? `${sortedFiltered[sortedFiltered.length - 1].timestamp} -> ${sortedFiltered[0].timestamp}`
       : "n/a";
+  const eventTypePercentages = {
+    created: filtered.length > 0 ? (eventTypeCounts.created ?? 0) / filtered.length * 100 : 0,
+    updated: filtered.length > 0 ? (eventTypeCounts.updated ?? 0) / filtered.length * 100 : 0,
+    completed: filtered.length > 0 ? (eventTypeCounts.completed ?? 0) / filtered.length * 100 : 0,
+  };
 
   return (
     <section>
@@ -1700,12 +1810,16 @@ function TimelinePage() {
         <button onClick={exportBucketCountsJson}>Export Bucket Counts JSON</button>
         <button onClick={exportModuleCountsJson}>Export Module Counts JSON</button>
         <button onClick={exportVisibleTitlesTxt}>Export Visible Titles TXT</button>
+        <button onClick={exportTopBucketsTxt} disabled={topBuckets.length === 0}>Export Top Buckets TXT</button>
         <button type="button" onClick={() => void navigator.clipboard?.writeText(sortedFiltered[0]?.title ?? "")} disabled={sortedFiltered.length === 0}>
           Copy First Title
         </button>
         <article className="card">Created: {eventTypeCounts.created ?? 0}</article>
         <article className="card">Updated: {eventTypeCounts.updated ?? 0}</article>
         <article className="card">Completed: {eventTypeCounts.completed ?? 0}</article>
+        <article className="card">
+          % C/U/D: {eventTypePercentages.created.toFixed(0)} / {eventTypePercentages.updated.toFixed(0)} / {eventTypePercentages.completed.toFixed(0)}
+        </article>
       </div>
       <h3>Recent {timelineView} Activity</h3>
       <ul className="stack">
@@ -1741,6 +1855,7 @@ function GraphPage() {
   const [search, setSearch] = useState("");
   const [edgeSearch, setEdgeSearch] = useState("");
   const [hideIsolated, setHideIsolated] = useState(false);
+  const [minDegree, setMinDegree] = useState(0);
   const filteredNodes = snapshot.graphNodes.filter((node) => {
     const typeMatch = nodeTypeFilter === "all" || node.type === nodeTypeFilter;
     const textMatch = search.trim() === "" || node.label.toLowerCase().includes(search.toLowerCase());
@@ -1766,23 +1881,33 @@ function GraphPage() {
       );
     },
   );
+  const nodeDegrees = filteredEdges.reduce<Record<string, number>>((acc, edge) => {
+    acc[edge.source] = (acc[edge.source] ?? 0) + 1;
+    acc[edge.target] = (acc[edge.target] ?? 0) + 1;
+    return acc;
+  }, {});
   const edgeClusters = filteredEdges.reduce<Record<string, number>>((acc, edge) => {
     acc[edge.relationship] = (acc[edge.relationship] ?? 0) + 1;
     return acc;
   }, {});
   const connectedNodeIds = new Set(filteredEdges.flatMap((edge) => [edge.source, edge.target]));
   const isolatedNodeCount = filteredNodes.filter((node) => !connectedNodeIds.has(node.id)).length;
-  const visibleNodes = hideIsolated ? filteredNodes.filter((node) => connectedNodeIds.has(node.id)) : filteredNodes;
+  const visibleNodesBase = hideIsolated ? filteredNodes.filter((node) => connectedNodeIds.has(node.id)) : filteredNodes;
+  const visibleNodes = visibleNodesBase.filter((node) => (nodeDegrees[node.id] ?? 0) >= minDegree);
+  const visibleNodeIdsFiltered = new Set(visibleNodes.map((node) => node.id));
+  const visibleEdges = filteredEdges.filter(
+    (edge) => visibleNodeIdsFiltered.has(edge.source) && visibleNodeIdsFiltered.has(edge.target),
+  );
   const exportFilteredGraphJson = () => {
     downloadContent(
-      JSON.stringify({ nodes: visibleNodes, edges: filteredEdges }, null, 2),
+      JSON.stringify({ nodes: visibleNodes, edges: visibleEdges }, null, 2),
       "life-os-graph-filtered.json",
       "application/json",
     );
   };
   const exportFilteredEdgesCsv = () => {
     const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
-    const rows = filteredEdges.map((edge) =>
+    const rows = visibleEdges.map((edge) =>
       [
         edge.id,
         escape(nodeLabelById[edge.source] ?? edge.source),
@@ -1796,8 +1921,12 @@ function GraphPage() {
     const rows = visibleNodes.map((node) => `${node.id},"${node.label.replaceAll('"', '""')}",${node.type}`);
     downloadContent(["id,label,type", ...rows].join("\n"), "life-os-graph-visible-nodes.csv", "text/csv");
   };
-  const relationshipTotal = filteredEdges.length || 1;
-  const primaryRelationship = Object.entries(edgeClusters).sort((a, b) => b[1] - a[1])[0];
+  const relationshipTotal = visibleEdges.length || 1;
+  const visibleEdgeClusters = visibleEdges.reduce<Record<string, number>>((acc, edge) => {
+    acc[edge.relationship] = (acc[edge.relationship] ?? 0) + 1;
+    return acc;
+  }, {});
+  const primaryRelationship = Object.entries(visibleEdgeClusters).sort((a, b) => b[1] - a[1])[0];
   const nodeTypeTotal = visibleNodes.length || 1;
   const primaryNodeType = Object.entries(
     visibleNodes.reduce<Record<string, number>>((acc, node) => {
@@ -1806,7 +1935,7 @@ function GraphPage() {
     }, {}),
   ).sort((a, b) => b[1] - a[1])[0];
   const exportRelationshipCountsJson = () => {
-    downloadContent(JSON.stringify(edgeClusters, null, 2), "life-os-graph-relationship-counts.json", "application/json");
+    downloadContent(JSON.stringify(visibleEdgeClusters, null, 2), "life-os-graph-relationship-counts.json", "application/json");
   };
   const exportVisibleNodesJson = () => {
     downloadContent(JSON.stringify(visibleNodes, null, 2), "life-os-graph-visible-nodes.json", "application/json");
@@ -1815,7 +1944,7 @@ function GraphPage() {
   return (
     <section>
       <h2>Life Graph</h2>
-      <p>Nodes: {visibleNodes.length} | Edges: {filteredEdges.length} | Isolated nodes: {isolatedNodeCount}</p>
+      <p>Nodes: {visibleNodes.length} | Edges: {visibleEdges.length} | Isolated nodes: {isolatedNodeCount}</p>
       <article className="card">
         Top relationship ratio: {primaryRelationship ? `${primaryRelationship[0]} ${(primaryRelationship[1] / relationshipTotal * 100).toFixed(1)}%` : "n/a"}
       </article>
@@ -1841,12 +1970,16 @@ function GraphPage() {
         <label>
           <input type="checkbox" checked={hideIsolated} onChange={(event) => setHideIsolated(event.target.checked)} /> Hide isolated
         </label>
+        <label>
+          Min degree
+          <input type="number" min={0} value={minDegree} onChange={(event) => setMinDegree(Number(event.target.value) || 0)} />
+        </label>
         <button type="button" onClick={exportFilteredGraphJson}>Export Filtered Graph JSON</button>
         <button type="button" onClick={exportFilteredEdgesCsv}>Export Filtered Edges CSV</button>
         <button type="button" onClick={exportVisibleNodeLabelsCsv}>Export Visible Nodes CSV</button>
         <button type="button" onClick={exportVisibleNodesJson}>Export Visible Nodes JSON</button>
         <button type="button" onClick={exportRelationshipCountsJson}>Export Relationship Counts JSON</button>
-        <button type="button" onClick={() => { setNodeTypeFilter("all"); setRelationshipFilter("all"); setSearch(""); setEdgeSearch(""); setHideIsolated(false); }}>
+        <button type="button" onClick={() => { setNodeTypeFilter("all"); setRelationshipFilter("all"); setSearch(""); setEdgeSearch(""); setHideIsolated(false); setMinDegree(0); }}>
           Reset Filters
         </button>
       </div>
@@ -1860,7 +1993,7 @@ function GraphPage() {
       </ul>
       <h3>Relationship Clusters</h3>
       <ul className="stack">
-        {Object.entries(edgeClusters).map(([relationship, count]) => (
+        {Object.entries(visibleEdgeClusters).map(([relationship, count]) => (
           <li key={relationship} className="card">
             {relationship}: {count}
           </li>
@@ -1868,7 +2001,7 @@ function GraphPage() {
       </ul>
       <h3>Edges</h3>
       <ul className="stack">
-        {filteredEdges.map((edge) => (
+        {visibleEdges.map((edge) => (
           <li key={edge.id} className="card">
             {nodeLabelById[edge.source] ?? edge.source} --{edge.relationship}--&gt; {nodeLabelById[edge.target] ?? edge.target}
           </li>
@@ -2161,6 +2294,19 @@ function SettingsPage() {
     };
     downloadContent(JSON.stringify(payload, null, 2), "life-os-state-stats.json", "application/json");
   };
+  const copyStateStats = () => {
+    const payload = {
+      journalEntries: snapshot.journalEntries.length,
+      notes: snapshot.notes.length,
+      tasks: snapshot.tasks.length,
+      workbooks: snapshot.workbooks.length,
+      timelineEvents: snapshot.timeline.length,
+      graphNodes: snapshot.graphNodes.length,
+      graphEdges: snapshot.graphEdges.length,
+      insights: snapshot.insights.length,
+    };
+    void navigator.clipboard?.writeText(JSON.stringify(payload, null, 2));
+  };
   const clearCachedSearch = () => {
     setNoteSearch("");
     setNoteSearchResults([]);
@@ -2187,6 +2333,9 @@ function SettingsPage() {
         </button>
         <button type="button" onClick={exportStateStatsJson}>
           Export State Stats JSON
+        </button>
+        <button type="button" onClick={copyStateStats}>
+          Copy State Stats
         </button>
         <button type="button" onClick={clearCachedSearch}>
           Clear Cached Search
