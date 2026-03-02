@@ -3,6 +3,8 @@ import type {
   LifeGraphEdge,
   LifeGraphNode,
   NoteItem,
+  NotificationItem,
+  ReviewSummary,
   TaskItem,
   TaskPriority,
   TaskStatus,
@@ -242,6 +244,14 @@ export class LifeOsEngine {
       lastSyncedAt: this.sync.getStatus().lastSyncedAt,
       syncQueue: this.syncQueue.list(),
     };
+  }
+
+  generateNotifications(): NotificationItem[] {
+    return this.coach.generateNotifications();
+  }
+
+  generateReview(period: "daily" | "weekly"): ReviewSummary {
+    return this.coach.generateReview(period);
   }
 
   private enqueueSyncOperation(

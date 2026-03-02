@@ -58,6 +58,19 @@ export interface CoachInsight {
   createdAt: string;
 }
 
+export interface NotificationItem {
+  id: string;
+  triggerDescription: string;
+  message: string;
+}
+
+export interface ReviewSummary {
+  period: "daily" | "weekly";
+  summary: string;
+  lessons: string[];
+  nextFocus: string[];
+}
+
 export interface TimelineEvent {
   id: string;
   module: ModuleName;

@@ -1,8 +1,13 @@
 import { ANALYZE_JOURNAL_ENTRY_PROMPT } from "./prompts/journal-analysis";
 import { NOTES_ACTION_EXTRACTION_PROMPT } from "./prompts/notes-analysis";
+import {
+  MEMORY_CONSOLIDATION_PROMPT,
+  SMART_NOTIFICATION_SUGGESTIONS_PROMPT,
+} from "./prompts/reviews";
 import { STORAGE_DATA_INSIGHTS_PROMPT } from "./prompts/storage-analysis";
 import { TASK_BEHAVIOR_ANALYSIS_PROMPT, TASK_BREAKDOWN_PROMPT } from "./prompts/task-analysis";
 import { WebLlmEngine, type WebLlmStructuredInsight } from "./webllm";
+import type { CoachInsight, NotificationItem, ReviewSummary } from "../../core/types";
 
 export interface PromptInsightPayload {
   content: string;
@@ -84,6 +89,33 @@ export class PromptEngine {
       throw new Error("WebLlmEngine returned invalid structured insight payload");
     }
     return parsed;
+  }
+
+  generateNotifications(insights: CoachInsight[]): NotificationItem[] {
+    renderPrompt(SMART_NOTIFICATION_SUGGESTIONS_PROMPT, {});
+    return insights.slice(0, 3).map((insight, index) => ({
+      id: `notif-${insight.id}`,
+      triggerDescription: `Pattern in ${insight.sourceModule}`,
+      message: `Check-in: ${insight.actions[index % insight.actions.length] ?? insight.content.slice(0, 80)}`,
+    }));
+  }
+
+  generateReview(period: "daily" | "weekly", insights: CoachInsight[]): ReviewSummary {
+    const now = new Date().toISOString().slice(0, 10);
+    renderPrompt(MEMORY_CONSOLIDATION_PROMPT, {
+      startDate: now,
+      endDate: now,
+    });
+    const topInsights = insights.slice(0, period === "daily" ? 3 : 5);
+    return {
+      period,
+      summary:
+        topInsights.length > 0
+          ? `${period === "daily" ? "Daily" : "Weekly"} review generated from ${topInsights.length} recent insights.`
+          : `No recent insights for ${period} review yet. Capture new entries to generate richer reflection.`,
+      lessons: topInsights.map((insight) => insight.content).slice(0, 3),
+      nextFocus: topInsights.flatMap((insight) => insight.actions).slice(0, 3),
+    };
   }
 }
 

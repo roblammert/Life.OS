@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { LifeOsEngine, type PersistedLifeOsState } from "../core/engines/life-os-engine";
-import type { TaskPriority } from "../core/types";
+import type { NotificationItem, ReviewSummary, TaskPriority } from "../core/types";
 import { type GlobalSearchResult, IndexedDbGateway } from "../lib/db/indexeddb";
 
 interface LifeOsContextValue {
@@ -18,6 +18,8 @@ interface LifeOsContextValue {
     listRecentJournalTitles: () => Promise<string[]>;
     searchNoteTitles: (query: string) => Promise<string[]>;
     searchGlobal: (query: string) => Promise<GlobalSearchResult[]>;
+    generateNotifications: () => NotificationItem[];
+    generateReview: (period: "daily" | "weekly") => ReviewSummary;
   };
 }
 
@@ -103,6 +105,8 @@ export function LifeOsProvider({ children }: { children: ReactNode }) {
           return notes.map((note) => note.title);
         },
         searchGlobal: async (query) => dbRef.current.searchAllModules(query),
+        generateNotifications: () => engineRef.current.generateNotifications(),
+        generateReview: (period) => engineRef.current.generateReview(period),
       },
     }),
     [snapshot],

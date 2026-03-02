@@ -1,4 +1,4 @@
-import type { CoachInsight, ModuleName } from "../types";
+import type { CoachInsight, ModuleName, NotificationItem, ReviewSummary } from "../types";
 import { createId, nowIso } from "../utils";
 import { PromptEngine, type PromptInsightPayload } from "../../lib/llm/prompt-engine";
 
@@ -49,6 +49,14 @@ export class CoachEngine {
     input: { name: string; metricLabel: string; metricValue: number },
   ): CoachInsight {
     return this.createInsight("storage", sourceId, this.promptEngine.analyzeStorage(input));
+  }
+
+  generateNotifications(): NotificationItem[] {
+    return this.promptEngine.generateNotifications(this.insights);
+  }
+
+  generateReview(period: "daily" | "weekly"): ReviewSummary {
+    return this.promptEngine.generateReview(period, this.insights);
   }
 }
 

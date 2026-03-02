@@ -296,10 +296,42 @@ function StoragePage() {
 }
 
 function CoachPage() {
-  const { snapshot } = useLifeOs();
+  const { snapshot, actions } = useLifeOs();
+  const [notifications, setNotifications] = useState<ReturnType<typeof actions.generateNotifications>>([]);
+  const [review, setReview] = useState<ReturnType<typeof actions.generateReview> | null>(null);
+
+  useEffect(() => {
+    setNotifications(actions.generateNotifications());
+  }, [actions, snapshot.insights]);
+
   return (
     <section>
       <h2>Life.Coach Insights</h2>
+      <div className="cards">
+        <button onClick={() => setReview(actions.generateReview("daily"))}>Generate Daily Review</button>
+        <button onClick={() => setReview(actions.generateReview("weekly"))}>Generate Weekly Review</button>
+      </div>
+      {review ? (
+        <article className="card">
+          <h3>{review.period === "daily" ? "Daily Review" : "Weekly Review"}</h3>
+          <p>{review.summary}</p>
+          <ul>
+            {review.lessons.map((lesson) => (
+              <li key={lesson}>{lesson}</li>
+            ))}
+          </ul>
+        </article>
+      ) : null}
+      <h3>Notification Center</h3>
+      <ul className="stack">
+        {notifications.map((notification) => (
+          <li key={notification.id} className="card">
+            <strong>{notification.triggerDescription}</strong>
+            <p>{notification.message}</p>
+          </li>
+        ))}
+      </ul>
+      <h3>Insights</h3>
       <ul className="stack">
         {snapshot.insights.map((insight) => (
           <InsightCard key={insight.id} insight={insight} />
