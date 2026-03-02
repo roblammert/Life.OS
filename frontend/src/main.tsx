@@ -1,0 +1,1 @@
+// frontend entrypoint placeholder
