@@ -136,6 +136,9 @@ function Layout() {
     ];
     downloadContent(lines.join("\n"), "life-os-search-visible-stats.txt", "text/plain");
   };
+  const exportVisibleSearchResultsTxt = () => {
+    downloadContent(visibleResults.map((result) => `[${result.module}] ${result.label}`).join("\n"), "life-os-search-results-visible.txt", "text/plain");
+  };
 
   return (
     <div className={`app-shell theme-${theme} layout-${layoutMode}`}>
@@ -207,6 +210,9 @@ function Layout() {
         <button type="button" onClick={exportVisibleSearchStatsTxt} disabled={visibleResults.length === 0}>
           Export Visible Stats TXT
         </button>
+        <button type="button" onClick={exportVisibleSearchResultsTxt} disabled={visibleResults.length === 0}>
+          Export Visible Results TXT
+        </button>
         <button
           type="button"
           onClick={() => void navigator.clipboard?.writeText(visibleResults.map((result) => `${result.module}: ${result.label}`).join("\n"))}
@@ -220,6 +226,13 @@ function Layout() {
           disabled={visibleResults.length === 0}
         >
           Copy Visible Previews
+        </button>
+        <button
+          type="button"
+          onClick={() => void navigator.clipboard?.writeText(Object.entries(moduleResultCounts).map(([module, count]) => `${module}:${count}`).join("\n"))}
+          disabled={Object.keys(moduleResultCounts).length === 0}
+        >
+          Copy Module Counts
         </button>
       </div>
       {visibleResults.length > 0 ? (
@@ -645,6 +658,9 @@ function DashboardPage() {
       "application/json",
     );
   };
+  const exportRecentJournalTitlesTxt = () => {
+    downloadContent(recentTitles.join("\n"), "life-os-dashboard-recent-journal-titles.txt", "text/plain");
+  };
 
   useEffect(() => {
     void (async () => {
@@ -727,6 +743,15 @@ function DashboardPage() {
         </button>
         <button type="button" onClick={exportOverdueTaskIdsTxt} disabled={overdueTasks.length === 0}>
           Export Overdue IDs TXT
+        </button>
+        <button type="button" onClick={exportRecentJournalTitlesTxt} disabled={recentTitles.length === 0}>
+          Export Recent Journal Titles TXT
+        </button>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(upcomingTasks.map((task) => task.title).join("\n"))} disabled={upcomingTasks.length === 0}>
+          Copy Upcoming Titles
+        </button>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(overdueTasks.map((task) => task.title).join("\n"))} disabled={overdueTasks.length === 0}>
+          Copy Overdue Titles
         </button>
       </div>
       <h3>Recent Journal Entries (DB query)</h3>
@@ -836,6 +861,10 @@ function JournalPage() {
   };
   const exportVisibleEntryIdsTxt = () => {
     downloadContent(displayedEntries.map((entry) => entry.id).join("\n"), "life-os-journal-visible-ids.txt", "text/plain");
+  };
+  const exportVisibleWordCountsCsv = () => {
+    const rows = displayedEntries.map((entry) => `${entry.id},"${entry.title.replaceAll('"', '""')}",${entry.contentMarkdown.split(/\s+/).filter(Boolean).length}`);
+    downloadContent(["id,title,wordCount", ...rows].join("\n"), "life-os-journal-word-counts.csv", "text/csv");
   };
 
   const onSubmit = (event: FormEvent) => {
@@ -964,6 +993,9 @@ function JournalPage() {
         <button type="button" onClick={exportVisibleEntryIdsTxt} disabled={displayedEntries.length === 0}>
           Export Visible IDs TXT
         </button>
+        <button type="button" onClick={exportVisibleWordCountsCsv} disabled={displayedEntries.length === 0}>
+          Export Word Counts CSV
+        </button>
         <button type="button" onClick={() => setOnlyMoodTagged((current) => !current)}>
           {onlyMoodTagged ? "Show All Entries" : "Only Mood-Tagged"}
         </button>
@@ -972,6 +1004,9 @@ function JournalPage() {
         </button>
         <button type="button" onClick={() => void navigator.clipboard?.writeText(displayedEntries.map((entry) => entry.id).join("\n"))} disabled={displayedEntries.length === 0}>
           Copy Visible IDs
+        </button>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(JSON.stringify(sentimentDistribution))} disabled={displayedEntries.length === 0}>
+          Copy Sentiment Summary
         </button>
         <button type="button" onClick={() => { setSearch(""); setSentimentFilter("all"); }}>
           Reset Filters
@@ -1081,6 +1116,10 @@ function NotesPage() {
   const exportVisibleIdsTxt = () => {
     downloadContent(displayedNotes.map((note) => note.id).join("\n"), "life-os-notes-visible-ids.txt", "text/plain");
   };
+  const exportChecklistTitlesTxt = () => {
+    const titles = displayedNotes.filter((note) => note.contentMarkdown.includes("- [")).map((note) => note.title);
+    downloadContent(titles.join("\n"), "life-os-notes-checklist-titles.txt", "text/plain");
+  };
   const checklistCount = displayedNotes.filter((note) => note.contentMarkdown.includes("- [")).length;
 
   const createTaskFromNote = (noteTitle: string, noteContent: string) => {
@@ -1142,6 +1181,9 @@ function NotesPage() {
         <button type="button" onClick={exportVisibleIdsTxt} disabled={displayedNotes.length === 0}>
           Export Visible IDs TXT
         </button>
+        <button type="button" onClick={exportChecklistTitlesTxt} disabled={checklistCount === 0}>
+          Export Checklist Titles TXT
+        </button>
         <button type="button" onClick={() => void navigator.clipboard?.writeText(displayedNotes.map((note) => note.title).join("\n"))} disabled={displayedNotes.length === 0}>
           Copy Visible Titles
         </button>
@@ -1150,6 +1192,9 @@ function NotesPage() {
         </button>
         <button type="button" onClick={() => setOnlyTagged((current) => !current)}>
           {onlyTagged ? "Show All Notes" : "Only Tagged Notes"}
+        </button>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(topTags.map(([tag, count]) => `${tag}:${count}`).join("\n"))} disabled={topTags.length === 0}>
+          Copy Top Tags
         </button>
         <button type="button" onClick={() => setPreviewMode((current) => !current)}>
           {previewMode ? "Hide Preview" : "Show Preview"}
@@ -1344,6 +1389,9 @@ function TasksPage() {
       .map((task) => `${task.id},"${task.title.replaceAll('"', '""')}",${task.dueDate}`);
     downloadContent(["id,title,dueDate", ...rows].join("\n"), "life-os-tasks-due-dates.csv", "text/csv");
   };
+  const exportActiveFiltersTxt = () => {
+    downloadContent(activeTaskFilters.join("\n"), "life-os-task-active-filters.txt", "text/plain");
+  };
   const markFilteredInProgress = () => {
     filteredTasks
       .filter((task) => task.status === "todo" || task.status === "blocked")
@@ -1428,6 +1476,9 @@ function TasksPage() {
         <button type="button" onClick={exportFilteredDueDatesCsv} disabled={filteredTasks.filter((task) => task.dueDate).length === 0}>
           Export Due Dates CSV
         </button>
+        <button type="button" onClick={exportActiveFiltersTxt} disabled={activeTaskFilters.length === 0}>
+          Export Active Filters TXT
+        </button>
         <button type="button" onClick={() => { setStatusFilter("all"); setPriorityFilter("all"); setDueFilter("all"); setSortBy("created_desc"); setSearch(""); setQuickCreatedOnly(false); setExcludeDone(false); setRequireDueDate(false); }}>
           Reset Filters
         </button>
@@ -1465,6 +1516,9 @@ function TasksPage() {
           <strong>Visible Tasks</strong>
           <p>{filteredTasks.length}</p>
         </article>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(nextTask?.title ?? "")} disabled={!nextTask}>
+          Copy Next Focus
+        </button>
       </div>
       <form className="stack" onSubmit={onSubmit}>
         <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Task title" />
@@ -1648,6 +1702,10 @@ function StoragePage() {
     const labels = displayedWorkbooks.flatMap((workbook) => workbook.metrics.map((metric) => metric.label));
     void navigator.clipboard?.writeText(labels.join("\n"));
   };
+  const exportWorkbookTotalsCsv = () => {
+    const rows = workbookMetricTotals.map((item) => `"${item.name.replaceAll('"', '""')}",${item.total}`);
+    downloadContent(["name,totalMetricValue", ...rows].join("\n"), "life-os-storage-workbook-totals.csv", "text/csv");
+  };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -1739,6 +1797,9 @@ function StoragePage() {
         <button type="button" onClick={copyVisibleMetricLabels} disabled={displayedWorkbooks.length === 0}>
           Copy Metric Labels
         </button>
+        <button type="button" onClick={exportWorkbookTotalsCsv} disabled={workbookMetricTotals.length === 0}>
+          Export Workbook Totals CSV
+        </button>
         <button
           type="button"
           onClick={() => void navigator.clipboard?.writeText(displayedWorkbooks.map((workbook) => workbook.name).join("\n"))}
@@ -1748,6 +1809,9 @@ function StoragePage() {
         </button>
         <button type="button" onClick={() => { setSearch(""); setMetricSearch(""); setSortBy("name_asc"); setMinMetricValue(0); setMinMetricCount(0); setMinNameLength(0); }}>
           Reset Filters
+        </button>
+        <button type="button" onClick={() => void navigator.clipboard?.writeText(topWorkbookMetricTotal ? `${topWorkbookMetricTotal.name}:${topWorkbookMetricTotal.total}` : "")} disabled={!topWorkbookMetricTotal}>
+          Copy Top Workbook Total
         </button>
       </div>
       <ul className="stack">
@@ -1912,6 +1976,10 @@ function CoachPage() {
     downloadContent(["id,date,title,description,whyItMatters", ...rows].join("\n"), "life-os-life-moments-visible.csv", "text/csv");
     setMessage("Visible life moments CSV export created.");
   };
+  const exportUrgencyCountsJson = () => {
+    downloadContent(JSON.stringify(urgencyCounts, null, 2), "life-os-notification-urgency-counts.json", "application/json");
+    setMessage("Urgency counts JSON export created.");
+  };
   const averageInsightAgeDays =
     visibleInsights.length > 0
       ? visibleInsights.reduce((acc, insight) => acc + (Date.now() - new Date(insight.createdAt).getTime()) / 86400000, 0) /
@@ -1971,8 +2039,12 @@ function CoachPage() {
         </button>
         <button onClick={exportVisibleNotificationsCsv}>Export Visible Notifications CSV</button>
         <button onClick={exportVisibleNotificationsJson}>Export Visible Notifications JSON</button>
+        <button onClick={exportUrgencyCountsJson}>Export Urgency Counts JSON</button>
         <button onClick={exportVisibleLifeMomentsJson}>Export Visible Life Moments JSON</button>
         <button onClick={exportVisibleLifeMomentsCsv}>Export Visible Life Moments CSV</button>
+        <button onClick={() => void navigator.clipboard?.writeText(visibleNotifications.map((notification) => notification.message).join("\n"))} disabled={visibleNotifications.length === 0}>
+          Copy Notification Messages
+        </button>
         <button onClick={() => setMessage(null)}>Clear Message</button>
         <article className="card">Visible insights: {visibleInsights.length}</article>
         <article className="card">Visible notifications: {visibleNotifications.length}</article>
@@ -2084,6 +2156,9 @@ function SyncPage() {
   const copyVisibleQueueIds = () => {
     void navigator.clipboard?.writeText(visibleQueue.map((operation) => operation.id).join("\n"));
   };
+  const exportVisibleQueueIdsTxt = () => {
+    downloadContent(visibleQueue.map((operation) => operation.id).join("\n"), "life-os-sync-visible-ids.txt", "text/plain");
+  };
   const totalQueueAgeHours =
     visibleQueue.length > 0
       ? visibleQueue.reduce((acc, operation) => acc + (Date.now() - new Date(operation.createdAt).getTime()) / 3600000, 0)
@@ -2144,6 +2219,12 @@ function SyncPage() {
         </button>
         <button onClick={copyVisibleQueueIds} disabled={visibleQueue.length === 0}>
           Copy Visible IDs
+        </button>
+        <button onClick={exportVisibleQueueIdsTxt} disabled={visibleQueue.length === 0}>
+          Export Visible IDs TXT
+        </button>
+        <button onClick={() => void navigator.clipboard?.writeText((["journal", "notes", "tasks", "storage"] as const).map((module) => `${module}:${visibleQueue.filter((operation) => operation.module === module).length}`).join("\n"))} disabled={visibleQueue.length === 0}>
+          Copy Module Counts
         </button>
         <button type="button" onClick={() => { setModuleFilter("all"); setOperationFilter("all"); setSortBy("newest"); setEntityFilter(""); setMaxAgeHours(0); }}>
           Reset Filters
@@ -2323,6 +2404,9 @@ function TimelinePage() {
   const exportVisibleEventIdsTxt = () => {
     downloadContent(sortedFiltered.map((event) => event.id).join("\n"), `life-os-timeline-ids-${timelineView}.txt`, "text/plain");
   };
+  const exportVisibleRangeTxt = () => {
+    downloadContent(visibleRangeSummary, `life-os-timeline-visible-range-${timelineView}.txt`, "text/plain");
+  };
   const visibleRangeSummary =
     sortedFiltered.length > 0
       ? `${sortedFiltered[sortedFiltered.length - 1].timestamp} -> ${sortedFiltered[0].timestamp}`
@@ -2395,6 +2479,7 @@ function TimelinePage() {
         <button onClick={exportTopBucketsTxt} disabled={topBuckets.length === 0}>Export Top Buckets TXT</button>
         <button onClick={exportEventTypeCountsJson}>Export Event Type Counts JSON</button>
         <button onClick={exportVisibleEventIdsTxt} disabled={sortedFiltered.length === 0}>Export Visible IDs TXT</button>
+        <button onClick={exportVisibleRangeTxt} disabled={sortedFiltered.length === 0}>Export Visible Range TXT</button>
         <button
           type="button"
           onClick={() => void navigator.clipboard?.writeText(weeklyBuckets.map(([bucket, count]) => `${bucket}:${count}`).join("\n"))}
@@ -2550,6 +2635,10 @@ function GraphPage() {
     const lines = Object.entries(visibleEdgeClusters).map(([relationship, count]) => `${relationship}:${count}`);
     void navigator.clipboard?.writeText(lines.join("\n"));
   };
+  const exportVisibleRelationshipsTxt = () => {
+    const lines = visibleEdges.map((edge) => `${nodeLabelById[edge.source] ?? edge.source} --${edge.relationship}--> ${nodeLabelById[edge.target] ?? edge.target}`);
+    downloadContent(lines.join("\n"), "life-os-graph-visible-relationships.txt", "text/plain");
+  };
   const edgeDensity =
     visibleNodes.length > 1 ? visibleEdges.length / (visibleNodes.length * (visibleNodes.length - 1)) : 0;
 
@@ -2599,6 +2688,7 @@ function GraphPage() {
         <button type="button" onClick={exportVisibleNodeDegreesJson} disabled={visibleNodes.length === 0}>Export Node Degrees JSON</button>
         <button type="button" onClick={exportVisibleNodeIdsTxt} disabled={visibleNodes.length === 0}>Export Node IDs TXT</button>
         <button type="button" onClick={exportVisibleEdgeIdsTxt} disabled={visibleEdges.length === 0}>Export Edge IDs TXT</button>
+        <button type="button" onClick={exportVisibleRelationshipsTxt} disabled={visibleEdges.length === 0}>Export Relationships TXT</button>
         <button type="button" onClick={copyRelationshipSummary} disabled={Object.keys(visibleEdgeClusters).length === 0}>Copy Relationship Summary</button>
         <button type="button" onClick={() => { setNodeTypeFilter("all"); setRelationshipFilter("all"); setSearch(""); setEdgeSearch(""); setHideIsolated(false); setMinDegree(0); setMinLabelLength(0); }}>
           Reset Filters
@@ -3067,6 +3157,21 @@ function SettingsPage() {
     const rows = filteredNoteSearchResults.map((title) => `"${title.replaceAll('"', '""')}"`);
     downloadContent(["title", ...rows].join("\n"), "life-os-note-search-results.csv", "text/csv");
   };
+  const copyTotalStateSummary = () => {
+    void navigator.clipboard?.writeText(
+      [
+        `journal:${snapshot.journalEntries.length}`,
+        `notes:${snapshot.notes.length}`,
+        `tasks:${snapshot.tasks.length}`,
+        `workbooks:${snapshot.workbooks.length}`,
+        `timeline:${snapshot.timeline.length}`,
+        `graphNodes:${snapshot.graphNodes.length}`,
+        `graphEdges:${snapshot.graphEdges.length}`,
+        `insights:${snapshot.insights.length}`,
+        `total:${totalStateRecords}`,
+      ].join("\n"),
+    );
+  };
   const totalStateRecords =
     snapshot.journalEntries.length +
     snapshot.notes.length +
@@ -3147,6 +3252,9 @@ function SettingsPage() {
         </button>
         <button type="button" onClick={() => void navigator.clipboard?.writeText(recentJournalTitles.join("\n"))} disabled={recentJournalTitles.length === 0}>
           Copy Recent Titles
+        </button>
+        <button type="button" onClick={copyTotalStateSummary}>
+          Copy Total State Summary
         </button>
         <article className="card">Auto refresh interval: {refreshIntervalSeconds}s</article>
         <div className="cards">
